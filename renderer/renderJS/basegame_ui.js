@@ -5,7 +5,8 @@
    (c) 2022-present FSG Modding.  MIT License. */
 // MARK: BASE GAME UI
 
-/* global I18N, MA, ST, DATA, NUM, client_BGData, ft_doReplace */
+/* global I18N, MA, DATA, icons, client_BGData, ft_doReplace, client_BuilderPlace, client_BuilderVehicle */
+let version    = 22
 let locale     = 'en'
 let i18nUnits  = null
 let searchTree = {}
@@ -62,247 +63,59 @@ const selectFills = [
 
 const comboKeyList = new Set()
 
-// #region COMBOS
-function subStep_combos (combos) {
-	if ( typeof combos === 'undefined' || combos === null || combos.length === 0 ) { return null }
-
-	const comboNodes   = []
-
-	for ( const thisCombo of combos ) {
-		if ( thisCombo === null ) { continue }
-
-		const thisComboIsBase = thisCombo.startsWith('$data')
-		const thisComboKey    = thisCombo.replaceAll('$data/', '').replaceAll('/', '_').replaceAll('.xml', '')
-
-		if ( thisComboKey !== null ) {
-			const thisItem = client_BGData.records[thisComboKey]
-
-			if ( typeof thisItem === 'undefined' ) { continue }
-
-			const thisIcon = ST.resolveIcon(thisItem.icon)
-
-			comboKeyList.add({
-				contents : null,
-				internal : true,
-				key      : thisComboKey,
-				source   : null,
-			})
-
-			const thisItemData = ST.getInfo(thisItem)
-			const brandImgSRC  = ST.resolveBrand(null, thisItem.brand)
-
-			const thisNode = DATA.templateEngine('combo_div_source', {
-				brandImage : `<img src="${brandImgSRC}" class="img-fluid store-brand-image">`,
-				iconImage  : `<img src="${thisIcon}" class="img-fluid store-icon-image">`,
-
-				category       : I18N.defer(thisItem.category),
-				clickPage      : thisComboKey,
-				clickSource    : thisComboIsBase ? 'base' : 'internal',
-				clickType      : 'item',
-				fullName       : I18N.defer(thisItem.name),
-				
-				compareTerms   : [
-					ST.markupDataType('price', thisItemData.price),
-					ST.markupDataType('workWidth', thisItemData.workWidth),
-				].join(''),
-			}, {}, {
-				'.comboCompareButton' : MA.showTest(thisItem.masterType === 'vehicle'),
-			})
-
-			DATA.eventEngine(thisNode, '.comboItemClicker', comboItemClicker)
-			DATA.eventEngine(thisNode, '.comboItemAddClicker', comboAddSingle)
-			
-			comboNodes.push(thisNode)
-		}
-	}
-	return comboNodes
-}
-// #endregion
-
-// #region VEHICLES
-// eslint-disable-next-line complexity
-async function subStep_vehicle(thisUUID, thisItem, pageID, combos = null) {
-	const thisIcon     = ST.resolveIcon(thisItem.icon)
-	const thisItemData = ST.getInfo(thisItem)
-	const brandImgSRC  = ST.resolveBrand(null, thisItem.brand)
-	const fillImages   = ST.markupFillTypes(thisItem.fillTypes)
-	const sprayTypes   = ST.markupSprayTypes(thisItem?.sprayTypes, thisItemData.workWidth)
-	const chartHTML    = MA.showTestValueBool(thisItem.motorInfo) ? ST.markupChart(thisUUID) : ''
-
-	const thisItemDataHTML = ST.typeDataOrder.map((x) => ST.markupDataType(x, thisItemData[x]))
-	
-	for ( const testItem of ST.vehTestTypes ) {
-		if ( MA.showTestValueBool(thisItem[testItem[0]], testItem[1]) ) {
-			thisItemDataHTML.push(ST.markupDataRow(
-				testItem[2],
-				testItem[3] === false ?
-					I18N.defer(thisItem[testItem[0]]) :
-					I18N.defer(testItem[3], false)
-			))
-		}
-	}
-
-	if ( sprayTypes !== null ) {
-		thisItemDataHTML.push(ST.markupDataRowTrue(
-			'look-width',
-			sprayTypes
-		))
-	} else {
-		thisItemDataHTML.push(ST.markupDataType(
-			'workWidth',
-			thisItemData.workWidth
-		))
-	}
-
-	thisItemDataHTML.push(
-		ST.markupDataType(
-			'fillLevel',
-			thisItemData.fillLevel,
-			fillImages.length !== 0 ? fillImages.join('') : null
-		),
-		ST.markupDataRowTrue(
-			'cat-attach-has',
-			MA.showTestValueBool(thisItem?.joints?.canUse) ? I18N.defer('basegame_attach_has', false) : null,
-			ST.markupJoints(thisItem?.joints?.canUse, true, false)
-		),
-		ST.markupDataRowTrue(
-			'cat-attach-need',
-			MA.showTestValueBool(thisItem?.joints?.needs) ? I18N.defer('basegame_attach_need', false) : null,
-			ST.markupJoints(thisItem?.joints?.needs, false, false)
-		)
-	)
-	const infoDivNode = DATA.templateEngine('vehicle_info_div', {
-		brandImage : `<img src="${brandImgSRC}" class="img-fluid store-brand-image">`,
-		iconImage  : `<img src="${thisIcon}" class="img-fluid store-icon-image">`,
-
-		category  : I18N.defer(thisItem.category),
-		functions : ST.markupFunctions(thisItem.functions),
-		itemName  : I18N.defer(thisItem.name),
-		itemTitle : thisItem.type,
-		typeDesc  : I18N.defer(thisItem.typeDesc),
-
-		chartData : chartHTML,
-		itemData  : thisItemDataHTML.join(''),
-	}, {
-		'vehicle-info-parent' : thisUUID,
-	}, {
-		'.combo-list' : MA.showTest(thisItem?.specs?.combination),
-	})
-
-	if ( combos !== null ) {
-		infoDivNode.querySelector('.combo_count').textContent = combos.length
-		const comboParent = infoDivNode.querySelector('.combo-item-list')
-		for ( const thisCombo of combos ) {
-			comboParent.appendChild(thisCombo)
-		}
-		const showHide = infoDivNode.querySelector('.inset-block-combo-show-hide')
-		showHide.addEventListener('click', () => {
-			const isShow      = showHide.querySelector('.section_hide').classList.contains('d-none')
-			comboParent.clsShow(isShow)
-			showHide.children[0].clsShow(!isShow)
-			showHide.children[1].clsShow(isShow)
-		})
-	}
-	
-	DATA.eventEngine(infoDivNode, '.action-compare-all-combo', comboAddAll)
-	DATA.eventEngine(infoDivNode, '.action-item-compare', () => {
-		window.basegame_IPC.sendCompare([buildCompareRequest(pageID)])
-	})
-	DATA.eventEngine(infoDivNode, '.attach_has, .attach_need', attachClicker)
-
-	MA.byIdAppend('bgContent', infoDivNode)
-
-	if ( MA.showTestValueBool(thisItem.motorInfo) ) {
-		ST.markupChartScripts(thisItem, thisUUID, i18nUnits)()
-	}
-}
-// #endregion
 
 
-// #region PLACEABLE
-async function subStep_placeable(thisItem, thisIcon) {
-	const fillImages       = ST.markupFillTypes(thisItem.silo.types)
-	const thisItemIcon     = ST.resolveIcon(thisIcon, thisItem.icon)
-	const thisItemDataHTML = []
-
-	thisItemDataHTML.push(
-		ST.markupDataType('price', NUM.default(thisItem.price)),
-		ST.markupDataType('income', NUM.default(thisItem.incomePerHour)),
-		ST.markupDataType('objects', NUM.default(thisItem.objectStorage)),
-		ST.markupDataType(
-			'fillLevel',
-			NUM.default(thisItem?.silo?.capacity),
-			fillImages.length !== 0 ? fillImages.join('') : null
-		),
-		ST.markupDataType('bees', NUM.default(thisItem.beehive.radius))
-	)
-	
-	for ( const husbandType of ST.husbandTestTypes ) {
-		if ( MA.showTestValueBool(thisItem.husbandry.type, husbandType) ) {
-			thisItemDataHTML.push(ST.markupDataRow(`fill-${husbandType.toLowerCase()}`, thisItem.husbandry.capacity))
-		}
-	}
-	
-	const infoDivNode = DATA.templateEngine('place_div', {
-		category  : I18N.defer(thisItem.category),
-		functions : ST.markupFunctions(thisItem.functions),
-		iconImage : `<img src="${thisItemIcon}" class="img-fluid store-icon-image">`,
-		itemName  : I18N.defer(thisItem.name),
-		itemTitle : thisItem.type,
-		placeData : thisItemDataHTML.join(''),
-	})
-
-	if ( MA.showTestValueBool(thisItem?.productions) ) {
-		const prodLines = ST.markupProductions(thisItem?.productions)
-		const parentElement = infoDivNode.querySelector('.prodLines')
-		for ( const element of prodLines ) {
-			parentElement.appendChild(element)
-		}
-	}
-
-	MA.byIdAppend('bgContent', infoDivNode)
-}
-// #endregion
-
-// #region CAT LISTS
+// MARK: CAT LISTS
 function getTopCat(cat) {
 	switch ( cat ) {
 		case 'vehicle' :
-			return client_BGData.category.vehicle.map((x) => buildCategoryItem({
-				image      : `<img src="img/baseCategory/${x.iconName}.webp" style="width:160px">`,
-				page       : x.iconName,
-				text       : x.title,
-				type       : 'subcat',
-			}))
+			return client_BGData.category.vehicle
+				.filter((x) => x.title !== '$l10n_category_sales')
+				.sort((a, b) => Intl.Collator().compare(a.key, b.key))
+				.map((x) => buildCategoryItem({
+					image      : `<img src="${icons.item(x.iconFile)}" style="width:160px">`,
+					page       : x.key,
+					text       : x.title,
+					type       : 'subcat',
+				}))
 		case 'tool' :
-			return client_BGData.category.tool.map((x) => buildCategoryItem({
-				image      : `<img src="img/baseCategory/${x.iconName}.webp" style="width:160px">`,
-				page       : x.iconName,
-				text       : x.title,
-				type       : 'subcat',
-			}))
+			return client_BGData.category.tool
+				.filter((x) => x.title !== '$l10n_category_chainsaws')
+				.sort((a, b) => Intl.Collator().compare(a.key, b.key))
+				.map((x) => buildCategoryItem({
+					image      : `<img src="${icons.item(x.iconFile)}" style="width:160px">`,
+					page       : x.key,
+					text       : x.title,
+					type       : 'subcat',
+				}))
 		case 'object' :
-			return client_BGData.category.object.map((x) => buildCategoryItem({
-				image      : `<img src="img/baseCategory/${x.iconName}.webp" style="width:160px">`,
-				page       : x.iconName,
-				text       : x.title,
-				type       : 'subcat',
-			}))
+			return client_BGData.category.object
+				.sort((a, b) => Intl.Collator().compare(a.key, b.key))
+				.map((x) => buildCategoryItem({
+					image      : `<img src="${icons.item(x.iconFile)}" style="width:160px">`,
+					page       : x.key,
+					text       : x.title,
+					type       : 'subcat',
+				}))
 		case 'placeable' :
-			return client_BGData.category.placeable.map((x) => buildCategoryItem({
-				image      : `<img src="img/baseCategory/${x.iconName}.webp" style="width:160px">`,
-				page       : x.iconName,
-				text       : x.title,
-				type       : 'subcat',
-			}))
+			return client_BGData.category.placeable
+				.sort((a, b) => Intl.Collator().compare(a.key, b.key))
+				.map((x) => buildCategoryItem({
+					image      : `<img src="${icons.item(x.iconFile)}" style="width:160px">`,
+					page       : x.key,
+					text       : x.title,
+					type       : 'subcat',
+				}))
 		case 'brand' :
-			return client_BGData.brands.map((x) => buildCategoryItem({
-				image : `<img src="img/brand/${x.image}.webp" style="width:100px">`,
-				maxWidthCalc : '100px',
-				page  : x.name,
-				text  : x.title,
-				type  : 'brand',
-			}))
+			return client_BGData.brands
+				.sort((a, b) => Intl.Collator().compare(a.title, b.title))
+				.map((x) => buildCategoryItem({
+					image : `<img src="img/brand/${x.icon}.webp" style="width:100px">`,
+					maxWidthCalc : '100px',
+					page  : x.key,
+					text  : x.title,
+					type  : 'brand',
+				}))
 		case 'fills' :
 			return selectFills.map((x) => buildCategoryItem({
 				image      : `<fillType class="h0" name="fill-${x.filltype}"></fillType>`,
@@ -311,19 +124,25 @@ function getTopCat(cat) {
 				type       : 'fill',
 			}))
 		case 'attach_need' :
-			return Object.keys(client_BGData.joints_needs).sort().map((x) => buildCategoryItem({
-				image      : `<img src="img/baseCategory/attach_${x.toLowerCase()}.webp" style="width:160px">`,
-				page       : x.toLowerCase(),
-				text       : x,
-				type       : 'attach_need',
-			}))
+			return Object.keys(client_BGData.jointNeedToVehicle)
+				.filter((x) => x.toLowerCase() !== 'train' )
+				.sort()
+				.map((x) => buildCategoryItem({
+					image      : `<img src="img/baseCategory/attach_${x.toLowerCase()}.webp" style="width:160px">`,
+					page       : x.toLowerCase(),
+					text       : x,
+					type       : 'attach_need',
+				}))
 		case 'attach_has' :
-			return Object.keys(client_BGData.joints_has).sort().map((x) => buildCategoryItem({
-				image      : `<img src="img/baseCategory/attach_${x.toLowerCase()}.webp" style="width:160px">`,
-				page       : x.toLowerCase(),
-				text       : x,
-				type       : 'attach_has',
-			}))
+			return Object.keys(client_BGData.jointHasToVehicle)
+				.filter((x) => x.toLowerCase() !== 'train' )
+				.sort()
+				.map((x) => buildCategoryItem({
+					image      : `<img src="img/baseCategory/attach_${x.toLowerCase()}.webp" style="width:160px">`,
+					page       : x.toLowerCase(),
+					text       : x,
+					type       : 'attach_has',
+				}))
 		default :
 			return locale
 	}
@@ -339,34 +158,53 @@ function buildCategoryItem({type = null, page = null, maxWidthCalc = null, image
 	].join('')
 }
 
+// MARK: build card item
 function buildItem(itemID, noBrand = false) {
-	const thisItem         = client_BGData.records[itemID]
-	const thisItemData     = ST.getInfo(thisItem)
+	const itemType       = client_BGData.itemKeyToType[itemID]
+	const skipBrand      = noBrand || ( itemType !== 'vehicles' )
+	const thisItem       = client_BGData[itemType][itemID]
+	const thisItemParsed = itemType === 'vehicles' ?
+		new client_BuilderVehicle(
+			itemID,
+			thisItem,
+			null,
+			locale,
+			version
+		) :
+		new client_BuilderPlace(
+			thisItem,
+			locale,
+			version
+		)
+
 	let   dataItems        = null
-	const attemptKey       = ST.getCleanParentID(thisItem.parentFile)
+	const attemptKey       = thisItemParsed.cleanParentID
 
 	if ( attemptKey !== null ) {
-		const attemptItem = client_BGData.records[attemptKey]
-		const newItemData = ST.getInfo(attemptItem)
-		dataItems = ST.getDataTypes(attemptItem.type).map((x) => ST.markupDataType(x, newItemData[x])).join('')
+		const attemptItem = client_BGData[itemType][attemptKey]
+		const attemptItemParsed = new client_BuilderVehicle(
+			attemptKey,
+			attemptItem,
+			null,
+			locale,
+			version
+		)
+		dataItems = attemptItemParsed.itemCard
 	} else {
-		dataItems = ST.getDataTypes(thisItem.type).map((x) => ST.markupDataType(x, thisItemData[x])).join('')
+		dataItems = thisItemParsed.itemCard
 	}
 
-	const iconImage = ST.resolveIcon(thisItem.icon)
-	const iconBrand = noBrand ? '' : ST.resolveBrand('', thisItem.brand)
-			
 	const infoDivNode = DATA.templateEngine('store_item', {
-		brandImage : noBrand ? '' : `<img src="${iconBrand}" class="img-fluid store-brand-image">`,
-		iconImage  : `<img src="${iconImage}" class="img-fluid store-icon-image">`,
+		brandImage : skipBrand ? '' : `<img src="${thisItemParsed.brand}" class="img-fluid store-brand-image">`,
+		iconImage  : `<img src="${thisItemParsed.icon}" class="img-fluid store-icon-image">`,
 
 		dataItems  : dataItems,
 		dlc        : thisItem.dlcKey !== null ? thisItem.dlcKey : '',
-		name       : I18N.defer(thisItem.name),
+		name       : thisItemParsed.name,
 	}, {}, {
 		'.compareSingle'    : MA.showTest(thisItem.masterType === 'vehicle'),
 		'.hasParentFile'    : attemptKey !== null ? 'notRealItem' : '',
-		'.store-icon-brand' : MA.showTest(!noBrand),
+		'.store-icon-brand' : MA.showTest(!skipBrand),
 	})
 
 	const pageClickerDIV = infoDivNode.querySelector('.pageClicker')
@@ -388,7 +226,7 @@ function buildSearchTree () {
 }
 
 function attachProperCase(pageID) {
-	for ( const thisAttach of client_BGData.joints_list ) {
+	for ( const thisAttach of client_BGData.jointList ) {
 		if ( thisAttach.toLowerCase() === pageID ) { return thisAttach }
 	}
 }
@@ -400,14 +238,18 @@ function findFill(fillType) {
 }
 
 function getByFill(fillType) {
-	const vehicleList = []
+	const vehicleList = new Set()
+	const fillCatList = icons.fill_cats_from_fill(fillType, version)
 
-	for ( const [thisItemID, thisItem] of Object.entries(client_BGData.records) ) {
-		if ( thisItem.masterType !== 'vehicle' ) { continue }
-		if ( thisItem.fillTypes.length === 0 ) { continue }
-		if ( thisItem.fillTypes.includes(fillType) ) { vehicleList.push(thisItemID) }
+	for ( const [thisItemID, thisItem] of Object.entries(client_BGData.vehicles) ) {
+		if ( thisItem.fillSpray.fillType.includes(fillType) ) { vehicleList.add(thisItemID) }
+
+		if ( thisItem.fillSpray.fillCat.length === 0 ) { continue }
+		for ( const fillCat of fillCatList ) {
+			if ( thisItem.fillSpray.fillCat.includes(fillCat)) { vehicleList.add(thisItemID) }
+		}
 	}
-	return vehicleList.sort()
+	return [...vehicleList].sort()
 }
 
 function buildCompareRequest(id) {
@@ -449,6 +291,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 	const pageType      = urlParams.get('type')
 	const pageID        = urlParams.get('page')
 
+	version   = window.location.pathname.substring(window.location.pathname.length -7, window.location.pathname.length -5)
 	locale    = await window.i18n.lang()
 	i18nUnits = await window.settings.units()
 
@@ -462,13 +305,13 @@ window.addEventListener('DOMContentLoaded', async () => {
 			break
 		}
 		case 'subcat' : {
-			const isVehicleCat = Object.hasOwn(client_BGData.catMap_vehicle, pageID)
-			const catL10n      = isVehicleCat ? client_BGData.catMap_vehicle[pageID] : client_BGData.catMap_place[pageID]
-			const catContent   = ((isVehicleCat ? client_BGData.byCat_vehicle[catL10n] : client_BGData.byCat_placeable[catL10n]) ?? []).sort()
+			const isVehicleCat = Object.hasOwn(client_BGData.catKeyToVehicle, pageID)
+			const catL10n      = client_BGData.catKeyToTitle[pageID]
+			const catContent   = ((isVehicleCat ? client_BGData.catKeyToVehicle[pageID] : client_BGData.catKeyToPlaceable[pageID]) ?? []).sort()
 
 			MA.byId('bgContent').appendChild(pageTitle(catL10n, {compareAll : true}))
 
-			for ( const element of catContent.map((x) => buildItem(x, !isVehicleCat)) ) {
+			for ( const element of catContent.sort().map((x) => buildItem(x, !isVehicleCat)) ) {
 				MA.byId('bgContent').appendChild(element)
 			}
 
@@ -478,12 +321,12 @@ window.addEventListener('DOMContentLoaded', async () => {
 			break
 		}
 		case 'brand' : {
-			const brandDisplay = pageID.replace('brand_', '').toUpperCase()
-			const brandContent = (client_BGData.byBrand_vehicle[brandDisplay] ?? []).sort()
+			const brandDisplay = pageID.toUpperCase()
+			const brandContent = (client_BGData.brandKeyToVehicles[brandDisplay] ?? []).sort()
 
-			MA.byId('bgContent').appendChild(pageTitle(client_BGData.brandMap[pageID], {compareAll : true, skipIfNotBase : true}))
+			MA.byId('bgContent').appendChild(pageTitle(client_BGData.brandKeyToTitle[pageID], {compareAll : true, skipIfNotBase : true}))
 
-			for ( const element of brandContent.map((x) => buildItem(x)) ) {
+			for ( const element of brandContent.sort().map((x) => buildItem(x)) ) {
 				MA.byId('bgContent').appendChild(element)
 			}
 
@@ -495,7 +338,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 		case 'attach_has' :
 		case 'attach_need' : {
 			const jointType     = attachProperCase(pageID)
-			const jointCase     = pageType === 'attach_has' ? 'joints_has' : 'joints_needs'
+			const jointCase     = pageType === 'attach_has' ? 'jointHasToVehicle' : 'jointNeedToVehicle'
 			const jointContents = (client_BGData[jointCase]?.[jointType] || []).sort()
 			const thisTitle     = `${I18N.defer(`basegame_${pageType}`, false)} : ${jointType}`
 
@@ -527,7 +370,8 @@ window.addEventListener('DOMContentLoaded', async () => {
 			break
 		}
 		case 'item' : {
-			const thisItem = client_BGData.records[pageID]
+			const itemType       = client_BGData.itemKeyToType[pageID]
+			const thisItem       = client_BGData?.[itemType]?.[pageID]
 			
 			if ( typeof thisItem === 'undefined' ) {
 				MA.byId('homePageContent').clsShow()
@@ -537,30 +381,37 @@ window.addEventListener('DOMContentLoaded', async () => {
 				break
 			}
 
-			if ( thisItem.masterType === 'vehicle' ) {
-				MA.byId('bgContent').appendChild(pageTitle(
-					`${client_BGData.brandMap[thisItem.brand.toLowerCase()]} ${I18N.defer(thisItem.name)}`,
-					{openFolder : thisItem.isBase, preTranslated : true, skipIfNotBase : true}))
-
-				const thisUUID = crypto.randomUUID()
-				await subStep_vehicle(
-					thisUUID,
-					thisItem,
+			const thisItemParsed = itemType === 'vehicles' ?
+				new client_BuilderVehicle(
 					pageID,
-					subStep_combos(thisItem?.specs?.combination)
+					thisItem,
+					null,
+					locale,
+					version
+				) :
+				new client_BuilderPlace(
+					thisItem,
+					locale,
+					version
 				)
 
-				if ( thisItem.isBase ) {
-					MA.byIdEventIfExists('openFolderButton', () => {
-						window.basegame_IPC.openFolder(thisItem.diskPath.slice(0, -1))
-					})
-				}
-				break
+
+			if ( thisItem.masterType === 'vehicle' ) {
+				MA.byId('bgContent').appendChild(pageTitle(
+					`${client_BGData.brandKeyToTitle[thisItem.sorting.brand.toUpperCase()]} ${thisItemParsed.name}`,
+					{openFolder : thisItem.isBase, preTranslated : true, skipIfNotBase : true}))
+
+				thisItemParsed.populateCombos(this.storeInfo)
+				const thisHTML = thisItemParsed.HTML
+				thisHTML.firstElementChild.classList.add('mt-3')
+				MA.byIdAppend('bgContent', thisHTML)
+				thisItemParsed.doCharts(i18nUnits)
+			} else {
+				MA.byId('bgContent').appendChild(pageTitle(thisItem.name, {skipIfNotBase : true}))
+				const thisHTML = thisItemParsed.HTML
+				thisHTML.firstElementChild.classList.add('mt-3')
+				MA.byIdAppend('bgContent', thisHTML)
 			}
-
-			MA.byId('bgContent').appendChild(pageTitle(thisItem.name, {skipIfNotBase : true}))
-			await subStep_placeable(thisItem)
-
 			break
 		}
 		default : {
@@ -572,7 +423,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 				break
 			}
 			
-			buildSearchTree()
+			// buildSearchTree()
 			MA.byId('homePageContent').clsShow()
 
 			MA.byId('mods__filter').addEventListener('keyup', doFilter)
@@ -704,3 +555,4 @@ function comboItemClicker(e) {
 	location.search = `?type=${type}&page=${page}`
 }
 // #endregion
+

@@ -5,7 +5,7 @@
    (c) 2022-present FSG Modding.  MIT License. */
 // MARK: Store Item Builder Classes
 
-/* global clientGetFillCat, I18N, DATA, client_BGData, MA, Chart */
+/* global I18N, DATA, client_BGData, MA, Chart */
 
 const UNITS = {
 	ft   : { factor : 3.28084,   precision : 1, unit : 'unit_ft' },
@@ -23,7 +23,54 @@ const UNITS = {
 	t    : { factor : 0.01,      precision : 1, unit : 'unit_t' },
 }
 
-
+const fillCat = {
+	19 : {
+		augerwagon      : ['wheat', 'barley', 'oat', 'canola', 'soybean', 'sunflower', 'maize', 'fertilizer', 'seeds'],
+		bulk            : ['wheat', 'barley', 'oat', 'canola', 'sunflower', 'soybean', 'maize', 'potato', 'sugarbeet', 'manure', 'seeds', 'forage', 'forage_mixing', 'chaff', 'woodchips', 'silage', 'straw', 'grass_windrow', 'drygrass_windrow', 'sugarcane', 'fertilizer', 'pigfood', 'lime'],
+		combine         : ['wheat', 'barley', 'oat', 'canola', 'sunflower', 'soybean', 'maize'],
+		farmsilo        : ['wheat', 'barley', 'oat', 'canola', 'sunflower', 'soybean', 'maize', 'potato', 'sugarbeet', 'sugarcane'],
+		forageharvester : ['chaff', 'grass_windrow', 'drygrass_windrow', 'woodchips'],
+		foragewagon     : ['straw', 'grass_windrow', 'drygrass_windrow', 'chaff', 'silage'],
+		fork            : ['manure', 'silage', 'chaff', 'straw', 'grass_windrow', 'drygrass_windrow'],
+		hayloft         : ['straw', 'drygrass_windrow'],
+		liquid          : ['milk', 'fuel', 'water', 'diesel', 'def'],
+		loadingvehicle  : ['wheat', 'barley', 'oat', 'canola', 'sunflower', 'soybean', 'maize', 'seeds', 'forage', 'chaff', 'woodchips', 'silage', 'fertilizer', 'lime'],
+		manurespreader  : ['manure'],
+		piece           : ['wool', 'treesaplings', 'egg'],
+		silagetrailer   : ['straw', 'grass_windrow', 'drygrass_windrow', 'chaff', 'silage', 'woodchips', 'sugarcane'],
+		slurrytank      : ['liquidmanure', 'digestate'],
+		sprayer         : ['liquidfertilizer', 'herbicide'],
+		spreader        : ['fertilizer'],
+		trainwagon      : ['wheat', 'barley', 'oat', 'canola', 'maize', 'sunflower', 'soybean', 'sugarbeet', 'potato'],
+		windrow         : ['straw', 'drygrass_windrow', 'grass_windrow'],
+	},
+	22 : {
+		augerwagon          : ['wheat', 'barley', 'oat', 'canola', 'soybean', 'sunflower', 'maize', 'fertilizer', 'seeds', 'sorghum'],
+		bulk                : ['wheat', 'barley', 'oat', 'canola', 'sunflower', 'soybean', 'maize', 'potato', 'sugarbeet', 'sugarbeet_cut', 'manure', 'seeds', 'forage', 'forage_mixing', 'chaff', 'woodchips', 'silage', 'straw', 'grass_windrow', 'drygrass_windrow', 'sugarcane', 'fertilizer', 'pigfood', 'lime', 'snow', 'roadsalt', 'sorghum', 'olive', 'stone', 'mineral_feed', 'carrot', 'beetroot', 'parsnip'],
+		combine             : ['wheat', 'barley', 'oat', 'canola', 'sunflower', 'soybean', 'maize', 'sorghum'],
+		farmsilo            : ['wheat', 'barley', 'oat', 'canola', 'sunflower', 'soybean', 'maize', 'sorghum'],
+		forageharvester     : ['chaff', 'grass_windrow', 'woodchips'],
+		foragewagon         : ['straw', 'grass_windrow', 'drygrass_windrow', 'chaff', 'silage', 'forage'],
+		fork                : ['manure', 'silage', 'chaff', 'straw', 'grass_windrow', 'drygrass_windrow'],
+		hayloft             : ['straw', 'drygrass_windrow'],
+		liquid              : ['milk', 'water', 'diesel', 'def'],
+		loadingvehicle      : ['heat', 'barley', 'oat', 'canola', 'sunflower', 'soybean', 'maize', 'seeds', 'forage', 'chaff', 'woodchips', 'silage', 'fertilizer', 'lime', 'sorghum'],
+		manurespreader      : ['manure'],
+		mixerwagon          : ['forage', 'forage_mixing', 'drygrass_windrow', 'silage', 'straw', 'mineral_feed'],
+		piece               : ['wool', 'treesaplings', 'egg'],
+		product             : ['flour', 'bread', 'cake', 'butter', 'cheese', 'fabric', 'sugar', 'clothes', 'cereal', 'sunflower_oil', 'canola_oil', 'olive_oil', 'raisins', 'grapejuice', 'chocolate', 'boards', 'furniture', 'strawberry', 'lettuce', 'tomato', 'egg'],
+		product_bga         : ['ethane', 'electriccharge'],
+		shovel              : ['wheat', 'barley', 'oat', 'canola', 'sunflower', 'soybean', 'maize', 'potato', 'sugarbeet', 'sugarbeet_cut', 'manure', 'seeds', 'forage', 'forage_mixing', 'chaff', 'woodchips', 'silage', 'straw', 'grass_windrow', 'drygrass_windrow', 'sugarcane', 'fertilizer', 'pigfood', 'lime', 'snow', 'roadsalt', 'sorghum', 'grape', 'olive', 'stone', 'mineral_feed', 'carrot', 'beetroot', 'parsnip'],
+		silagetrailer       : ['straw', 'grass_windrow', 'drygrass_windrow', 'chaff', 'silage', 'forage', 'woodchips', 'sugarcane'],
+		slurrytank          : ['liquidmanure', 'digestate'],
+		sprayer             : ['liquidfertilizer', 'herbicide'],
+		spreader            : ['fertilizer'],
+		topliftingharvester : ['carrot', 'beetroot', 'parsnip'],
+		trainwagon          : ['wheat', 'barley', 'oat', 'canola', 'maize', 'sunflower', 'soybean', 'sugarcane', 'sugarbeet', 'potato', 'sorghum', 'woodchips', 'olive', 'grape', 'seeds', 'carrot', 'beetroot', 'parsnip'],
+		vegetables          : ['potato', 'carrot', 'beetroot', 'parsnip'],
+		windrow             : ['straw', 'drygrass_windrow', 'grass_windrow'],
+	},
+}
 
 const icons = {
 	map_to : (name) => {
@@ -78,6 +125,18 @@ const icons = {
 			}
 		}
 		return ''
+	},
+
+	fill_cats_from_fill : (name, version = 22) => {
+		const foundCats = []
+		if ( typeof fillCat[version] !== 'object' ) { return foundCats }
+		for ( const [key, value] of Object.entries(fillCat?.[version])) {
+			if ( value.includes(name) ) { foundCats.push(key) }
+		}
+		return foundCats
+	},
+	fills_from_fill_cat : (name, version = 22) => {
+		return fillCat?.[version]?.[name] || []
 	},
 }
 
@@ -238,9 +297,12 @@ class client_BuilderVehicle {
 
 		this.#normalize_specs()
 
-		this.#html_arr.chart = this.#item.motor.motors.length !== 0 ? this.#markupChart() : []
-
+		
 		this.doIcons()
+	}
+
+	get data() {
+		return this.#specs
 	}
 
 	get comboData() {
@@ -255,13 +317,42 @@ class client_BuilderVehicle {
 		]
 	}
 
+	get cleanParentID() {
+		const parentFile = this.#item.parentItem
+		if ( typeof parentFile !== 'string' ) { return null }
+		const attemptKey = parentFile.replace('.xml', '').replace('$data/', '').replaceAll('/', '_')
+		return ( typeof client_BGData.vehicles[attemptKey] !== 'undefined' ) ? attemptKey : null
+	}
+
 	#add_sidebar(item) {
 		if ( item !== '' ) { this.#html_arr.sidebar.push(item) }
 	}
 
+	get icon() { return this.#icon }
+	get brand() { return this.#brand }
+	get name() { return I18N.unwrap_base(this.#item.sorting.name, this.#version) }
+
 	doIcons() {
-		this.#icon  = icons.item(this.#item.iconFile, this.#item.iconBase)
+		if ( typeof this.#item.dlcKey !== 'undefined' && this.#item.dlcKey !== null ) {
+			const iconPointer = this.#item.iconOrig.replace('.png', '.dds')
+			const trueIcon    = client_BGData.icons[iconPointer]
+			if ( typeof trueIcon === 'string' ) { this.#icon = trueIcon }
+		} else {
+			this.#icon  = icons.item(this.#item.iconFile, this.#item.iconBase, this.#item.iconOrig)
+		}
 		this.#brand = icons.brand(this.#brands[this.#item.sorting.brand], this.#item.sorting.brand)
+	}
+
+	get itemCard() {
+		return [
+			'price',
+			'powerSpan',
+			'needPower',
+			'maxSpeed',
+			'speedLimit',
+			'fillLevel',
+			'workWidth',
+		].map((x) => this.#util.markup_data_ifTrue(x, this.#specs[x])).join('')
 	}
 
 	doSideBar() {
@@ -308,6 +399,8 @@ class client_BuilderVehicle {
 	}
 
 	get HTML() {
+		this.#html_arr.chart = this.#item.motor.motors.length !== 0 ? this.#markupChart() : []
+
 		this.doSideBar()
 
 		this.#htmlDIV = document.createElement('div')
@@ -660,7 +753,7 @@ class client_BuilderVehicle {
 		const allFills = new Set(fills)
 
 		for ( const cat of cats ) {
-			clientGetFillCat(cat, this.#version).map((x) => allFills.add(x))
+			icons.fills_from_fill_cat(cat, this.#version).map((x) => allFills.add(x))
 		}
 
 		return [...allFills].map((x) => `<fillType name="${x}"></fillType>`)
@@ -693,7 +786,7 @@ class client_BuilderVehicle {
 		return [this.#filename, this.#uuid]
 	}
 
-	populateCombos (lookRecord) {
+	populateCombos (lookRecord = {}) {
 		if ( this.#item.sorting.combos.length === 0 ) { return }
 	
 		for ( const thisCombo of this.#item.sorting.combos ) {
@@ -703,7 +796,7 @@ class client_BuilderVehicle {
 			const thisComboKey    = thisComboIsBase ? thisCombo.replaceAll('$data/', '').replaceAll('/', '_').replaceAll('.xml', '') : thisCombo
 	
 			if ( thisComboKey !== null ) {
-				const thisItem = thisComboIsBase ? client_BGData?.[client_BGData.itemKeyToType[thisComboKey]]?.[thisComboKey] : lookRecord.vehicles[thisComboKey]
+				const thisItem = thisComboIsBase ? client_BGData?.[client_BGData.itemKeyToType[thisComboKey]]?.[thisComboKey] : lookRecord?.vehicles?.[thisComboKey]
 	
 				if ( typeof thisItem === 'undefined' ) { continue }
 	
@@ -803,6 +896,22 @@ class client_BuilderPlace {
 		this.#version  = gameVersion
 
 		this.doIcons()
+	}
+
+	get data() {
+		return this.#specs
+	}
+
+	get cleanParentID() {
+		return null
+	}
+
+	get icon() { return this.#icon }
+	get brand() { return '' }
+	get name() { return I18N.unwrap_base(this.#item.sorting.name, this.#version) }
+
+	get itemCard() {
+		return this.#util.markup_data_ifTrue('price', this.#util.num_default(this.#item.sorting.price))
 	}
 
 	#add_sidebar(item) {
@@ -912,30 +1021,6 @@ class client_BuilderPlace {
 			'</div>',
 			'</div>',
 		].join('')
-
-		
-
-
-		// for ( const inputMix in thisProduction.inputs ) {
-		// 	if ( inputMix !== 'no_mix' ) {
-		// 		inputHTML.push(ST.markupRow(
-		// 			thisProduction.inputs[inputMix].map((x) =>
-		// 				`${NUM.fmtMulti(x.amount, cycleMultiplier)}${_f(x.filltype)}`
-		// 			).join('<i class="text-info bi-distribute-horizontal mx-1"></i>')
-		// 		))
-		// 	}
-		// }
-
-		// inputHTML.push(...thisProduction.inputs.no_mix.map((x) => {
-		// 	return ST.markupRowSinglet(NUM.fmtMulti(x.amount, cycleMultiplier), _f(x.filltype))
-		// }))
-
-		// if ( thisProduction.boosts.length !== 0 ) {
-		// 	inputHTML.unshift(ST.markupRow(thisProduction.boosts.map((x) =>
-		// 		`<div class="d-flex align-items-center">${NUM.fmtMulti(x.amount, cycleMultiplier)}${_f(x.filltype)}<span class="ms-1">(${x.boostFac * 100}%)</span></div>`
-		// 	).join('<i class="text-info bi-plus-slash-minus mx-1"></i>')))
-		// }
-
 	}
 
 	get HTML() {
@@ -975,7 +1060,7 @@ class client_BuilderPlace {
 		const allFills = new Set(fills)
 
 		for ( const cat of cats ) {
-			clientGetFillCat(cat, this.#version).map((x) => allFills.add(x))
+			icons.fills_from_fill_cat(cat, this.#version).map((x) => allFills.add(x))
 		}
 
 		return [...allFills].map((x) => `<fillType name="${x}"></fillType>`)

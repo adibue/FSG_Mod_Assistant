@@ -14,12 +14,9 @@
 	<link rel="stylesheet" href="inc/fsico.css">
 	<script src="inc/bootstrap.bundle.min.js"></script>
 	<script src="inc/chart.min.js"></script>
-
 	<script src="renderJS/util/util_lib.js"></script>
 	<script src="renderJS/util/storeItemBuilder.js"></script>
-	<script src="renderJS/util/storeItems.js"></script>
 	<script src="renderJS/util/fillType.js"></script>
-	<script src="renderJS/util/categoryMapper.js"></script>
 	<script src="renderJS/util/baseGameData_22.js"></script>
 	<script src="renderJS/util/key_lookup_table.js"></script>
 	<script src="renderJS/util/cropcal.js"></script>
@@ -223,57 +220,6 @@
 			<span class="visually-hidden">Loading...</span>
 		</div>
 	</div>
-
-<template id="prod_div">
-	<div class="row border-top mt-2">
-		<div class="col-4 text-center align-self-top border-end">
-			<div class="row py-2"><div class="col"><template-var>prodName</template-var></div></div>
-			<div class="row py-2 align-items-center"><div class="col-12 mb-1"><i style="font-size: 1.5rem" class="fsico-look-prod-cycle"></i></div><div class="col-12"><template-var>prodCycles</template-var></div></div>
-			<div class="row py-2 align-items-center"><div class="col-12 mb-1"><i style="font-size: 1.5rem" class="fsico-look-price"></i></div><div class="col-12"><template-var>prodCost</template-var></div></div>
-		</div>
-		<div class="col-8 text-center align-self-center">
-			<div class="row align-items-center"><!-- inputs -->
-				<div class="col-10">
-					<template-var>prodInputs</template-var>
-				</div>
-				<div class="col-2">
-					<i style="font-size: 1.5rem" class="fsico-look-prod-input"></i>
-				</div>
-			</div>
-			<div class="row border-top align-items-center pt-2 mt-2"><!-- outputs -->
-				<div class="col-10">
-					<template-var>prodOutput</template-var>
-				</div>
-				<div class="col-2">
-					<i style="font-size: 1.5rem" class="fsico-look-prod-output"></i>
-				</div>
-			</div>
-		</div>
-	</div>
-</template>
-
-<template id="place_div">
-	<div class="col-12 inset-block inset-placable-block"><div>
-		<span class="inset-block-header" name="detail_dev_info"><template-var>itemName</template-var></span>
-		<span class="inset-block-blurb-detail">
-			<small class="fst-italic fw-normal"><template-var>itemTitle</template-var></small>
-			<span class="fw-normal" style="font-size: 50%">-</span>
-			<small class="fw-bold"><template-var>category</template-var></small>
-		</span>
-		<div class="inset-body">
-			<div class="row mx-2">
-				<div class="col-5 my-auto mx-auto">
-					<div class="store-icon-image"><template-var>iconImage</template-var></div>
-				</div>
-				<div class="col-7">
-					<template-var>placeData</template-var>
-					<div class="prodLines"></div>
-				</div>
-				<div class="col-12 pt-2"><p class="text-center"><template-var>functions</template-var></p></div>
-			</div>
-		</div>
-	</div></div>
-</template>
 
 </body>
 </html>
