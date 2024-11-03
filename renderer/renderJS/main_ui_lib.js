@@ -124,6 +124,7 @@ class StateManager {
 
 	// MARK: process data
 	async updateFromData(data) {
+		window.data = data
 		this.#updateTracking(data)
 	
 		for ( const [CIndex, CKey] of Object.entries([...data.set_Collections]) ) {
@@ -705,10 +706,13 @@ class StateManager {
 			})
 		}
 
+		const fixCat   = [...new Set(thisMod.has_cats.map((x) => x.split(' ')).flat())].sort()
+		const fixBrand = [...new Set(thisMod.has_brands.map((x) => x.split(' ')).flat())].sort()
+
 		mod.node.appendChild(DATA.templateEngine('item_mod', {
 			author     : DATA.escapeSpecial(thisMod.modDesc.author),
-			brands     : this.#addExtraInfo(thisMod.has_brands),
-			categories : this.#addExtraInfo(thisMod.has_cats),
+			brands     : this.#addExtraInfo(fixBrand),
+			categories : this.#addExtraInfo(fixCat),
 			fileDate   : thisMod.fileDetail.fileDate.slice(0, 10),
 			fileSize   : ( thisMod.fileDetail.fileSize > 0 ) ? await DATA.bytesToHR(thisMod.fileDetail.fileSize) : '',
 			fileTime   : thisMod.fileDetail.fileDate.slice(11, 16),
