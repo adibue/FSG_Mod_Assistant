@@ -598,6 +598,7 @@
 	"sort_author"                           : "Sorteer : Auteur",
 	"sort_date"                             : "Sorteren : Datum bestand",
 	"sort_name"                             : "Sorteren : Bestandsnaam",
+	"sort_size"                             : "Sorteer : Grootte",
 	"sort_title"                            : "Sorteer : Titel",
 	"sort_version"                          : "Sorteer : Versie",
 	"status-processing-title"               : "Mods verwerken...",

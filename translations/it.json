@@ -598,6 +598,7 @@
 	"sort_author"                           : "Ordina: Autore",
 	"sort_date"                             : "Ordina : Data Del File",
 	"sort_name"                             : "Ordina: Nome File",
+	"sort_size"                             : "Ordinamento : Dimensione",
 	"sort_title"                            : "Ordina per: Titolo",
 	"sort_version"                          : "Ordina : Versione",
 	"status-processing-title"               : "Elaborazione Mod...",

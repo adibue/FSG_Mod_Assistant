@@ -598,6 +598,7 @@
 	"sort_author"                           : "排序 : 作者",
 	"sort_date"                             : "排序 ：文件日期",
 	"sort_name"                             : "排序 ：文件名",
+	"sort_size"                             : "排序 : 大小",
 	"sort_title"                            : "排序 : 标题",
 	"sort_version"                          : "排序 : 版本",
 	"status-processing-title"               : "处理模组...",

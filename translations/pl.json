@@ -598,6 +598,7 @@
 	"sort_author"                           : "Sortuj : Autor",
 	"sort_date"                             : "Sortuj : Data pliku",
 	"sort_name"                             : "Sortuj : Nazwa pliku",
+	"sort_size"                             : "Sortuj: Rozmiar",
 	"sort_title"                            : "Sortuj: Tytuł",
 	"sort_version"                          : "Sortuj: Wersja",
 	"status-processing-title"               : "Przetwarzanie modów...",

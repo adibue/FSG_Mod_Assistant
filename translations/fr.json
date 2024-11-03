@@ -598,6 +598,7 @@
 	"sort_author"                           : "Trier : Auteur",
 	"sort_date"                             : "Trier : Date du fichier",
 	"sort_name"                             : "Trier : Nom de fichier",
+	"sort_size"                             : "Tri : Taille",
 	"sort_title"                            : "Trier : Titre",
 	"sort_version"                          : "Trier : Version",
 	"status-processing-title"               : "Modes de traitement...",

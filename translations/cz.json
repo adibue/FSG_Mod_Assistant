@@ -598,6 +598,7 @@
 	"sort_author"                           : "Třídit : Autor",
 	"sort_date"                             : "Třídit : Datum souboru",
 	"sort_name"                             : "Třídit : Název souboru",
+	"sort_size"                             : "Třídit : Velikost",
 	"sort_title"                            : "Třídit : Název",
 	"sort_version"                          : "Třídit : Verze",
 	"status-processing-title"               : "Zpracované modifikace...",

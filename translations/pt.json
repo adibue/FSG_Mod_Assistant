@@ -598,6 +598,7 @@
 	"sort_author"                           : "Ordenar : Autor",
 	"sort_date"                             : "Ordenar : Data do ficheiro",
 	"sort_name"                             : "Ordenar : Nome do ficheiro",
+	"sort_size"                             : "Ordenar : Tamanho",
 	"sort_title"                            : "Ordenar : Título",
 	"sort_version"                          : "Ordenar : Versão",
 	"status-processing-title"               : "Modificando processamento...",
