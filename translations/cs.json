@@ -357,6 +357,8 @@
 	"mod_badge_fs19__title"                 : "该模组为 FS19",
 	"mod_badge_fs22"                        : "FS22",
 	"mod_badge_fs22__title"                 : "该模组为 FS22",
+	"mod_badge_fs25"                        : "FS25",
+	"mod_badge_fs25__title"                 : "该修改器适用于 FS25",
 	"mod_badge_keys_bad"                    : "keys",
 	"mod_badge_keys_bad__title"             : "This mod adds keybindings to the game, some may conflict",
 	"mod_badge_keys_ok"                     : "keys",

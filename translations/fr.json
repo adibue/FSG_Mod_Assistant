@@ -357,6 +357,8 @@
 	"mod_badge_fs19__title"                 : "Le mod est pour FS19",
 	"mod_badge_fs22"                        : "FS22",
 	"mod_badge_fs22__title"                 : "Le mod est pour FS22",
+	"mod_badge_fs25"                        : "FS25",
+	"mod_badge_fs25__title"                 : "Le mod est pour FS25",
 	"mod_badge_keys_bad"                    : "clés",
 	"mod_badge_keys_bad__title"             : "Ce mod ajoute des raccourcis clavier au jeu, certains peuvent entrer en conflit",
 	"mod_badge_keys_ok"                     : "clés",

@@ -357,6 +357,8 @@
 	"mod_badge_fs19__title"                 : "Мод для FS19",
 	"mod_badge_fs22"                        : "FS22",
 	"mod_badge_fs22__title"                 : "Мод для FS22",
+	"mod_badge_fs25"                        : "FS25",
+	"mod_badge_fs25__title"                 : "Мод предназначен для FS25",
 	"mod_badge_keys_bad"                    : "клавиши",
 	"mod_badge_keys_bad__title"             : "Этот мод добавляет в игру привязки клавиш которые могут конфликтовать с привязками клавиш другого мода",
 	"mod_badge_keys_ok"                     : "клавиши",

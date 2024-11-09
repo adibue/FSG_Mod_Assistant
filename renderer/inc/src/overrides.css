@@ -400,6 +400,15 @@ i18n-text[data-key="game_icon_lg"] i {
 	background-image: var(--bs-gradient) !important;
 	transform: skew(-7deg, 0deg);
 }
+.badge-mod-fs25 {
+	background-color: #A0C213!important;
+	border-color: #9abe0b!important;
+	border-radius: .75em;
+	border-top-right-radius: 0px;
+	border-bottom-left-radius: 0px;
+	background-image: var(--bs-gradient) !important;
+	transform: skew(-7deg, 0deg);
+}
 .badge-mod-keys_bad {
 	background-color: var(--bs-danger-bg-subtle)!important;
 	border-color: var(--bs-danger-border-subtle)!important;
