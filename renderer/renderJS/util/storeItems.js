@@ -137,7 +137,7 @@ const ST = {
 		m3   : { factor : 0.001,     precision : 1, unit : 'unit_m3' },
 		mph  : { factor : 0.621371,  precision : 0, unit : 'unit_mph' },
 		none : { factor : 1,         precision : 0, unit : '' },
-		t    : { factor : 0.01,      precision : 1, unit : 'unit_t' },
+		t    : { factor : 0.001,     precision : 1, unit : 'unit_t' },
 	},
 	unitCombo : (type) => {
 		switch ( type ) {
