@@ -749,7 +749,11 @@ class StateManager {
 		}
 
 		if ( this.track.openCollection !== null ) {
-			this.collections[this.track.openCollection].modNode.classList.add('d-none')
+			if ( typeof this.collections[this.track.openCollection] === 'undefined' ) {
+				this.track.openCollection = null
+			} else {
+				this.collections[this.track.openCollection].modNode.classList.add('d-none')
+			}
 		}
 
 		if ( this.track.openCollection === id && !stayOpen ) {
