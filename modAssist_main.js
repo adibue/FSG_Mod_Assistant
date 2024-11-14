@@ -894,6 +894,7 @@ ipcMain.handle('state:all', () => { return {
 	foldersDirty       : serveIPC.isFoldersDirty,
 	gameRunning        : serveIPC.isGameRunning,
 	gameRunningEnabled : serveIPC.isGamePolling,
+	keepLoaderModal    : serveIPC.isProcessing && serveIPC.isDownloading,
 	pinMini            : serveIPC.windowLib.isAlwaysOnTop('mini'),
 	prefDanger         : serveIPC.isPrefWrong,
 	updateReady        : serveIPC.modCollect.updateIsReady,

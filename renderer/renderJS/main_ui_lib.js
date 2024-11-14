@@ -243,6 +243,10 @@ class StateManager {
 
 			
 			if ( Object.keys(status.botStatus.response).length === 0 ) { return }
+
+			if ( !status.keepLoaderModal && MA.byId('loadOverlay').checkVisibility() ) {
+				this.loader.hide()
+			}
 				
 			for ( const [CKey, IDs] of Object.entries(status.botStatus.requestMap) ) {
 				const thisBotDiv = this.collections?.[CKey]?.nodeBot ?? null
