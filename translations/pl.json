@@ -653,6 +653,8 @@
 	"user_pref_setting_discord_2"           : "Niestandardowe szczegóły Discord (puste = aktywna kolekcja)",
 	"user_pref_setting_game_args"           : "Parametry startowe",
 	"user_pref_setting_game_args_example"   : "(np. <em>-cheats -skipStartVideos -scriptDebug -autoStartSavegameId ##</em>)",
+	"user_pref_setting_game_cheats"         : "Włączanie/wyłączanie kodów",
+	"user_pref_setting_game_video"          : "Włączanie/wyłączanie filmu wprowadzającego",
 	"user_pref_setting_lock_lang"           : "Pomiń wykrywanie języka przy starcie",
 	"user_pref_tab_advanced"                : "Zaawansowany",
 	"user_pref_tab_display"                 : "Wyświetlacz",

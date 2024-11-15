@@ -653,6 +653,8 @@
 	"user_pref_setting_discord_2"           : "Detalle personalizado de Discord (vacío = Colección Activa)",
 	"user_pref_setting_game_args"           : "Argumentos del juego",
 	"user_pref_setting_game_args_example"   : "(p.e. <em>-cheats -skipStartVideos -scriptDebug -autoStartSavegameId ##</em>)",
+	"user_pref_setting_game_cheats"         : "Activar/desactivar trampas",
+	"user_pref_setting_game_video"          : "Activar/desactivar vídeo de introducción",
 	"user_pref_setting_lock_lang"           : "Saltar detección de idioma al iniciar",
 	"user_pref_tab_advanced"                : "Avanzado",
 	"user_pref_tab_display"                 : "Pantalla",

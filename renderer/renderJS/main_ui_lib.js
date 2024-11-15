@@ -1533,7 +1533,10 @@ class PrefLib {
 			'<i18n-text class="inset-block-header" data-key="user_pref_setting_game_args"></i18n-text>',
 			`<input type="text" class="form-control" id="pref--${ver}-game-args" style="font-size: 70%">`,
 			'<i18n-text class="inset-block-subtext" data-key="user_pref_setting_game_args_example"></i18n-text>',
-			'</div></div>',
+			'<div class="text-end">',
+			`<i18n-text class="btn btn-sm btn-outline-danger" id="pref--${ver}-game-args-cheat" data-key="user_pref_setting_game_cheats"></i18n-text>`,
+			`<i18n-text class="btn btn-sm btn-outline-danger ms-1" id="pref--${ver}-game-args-video" data-key="user_pref_setting_game_video"></i18n-text>`,
+			'</div></div></div>',
 
 			'<div class="col-12"><div class="row">',
 
@@ -1566,6 +1569,9 @@ class PrefLib {
 		const switch_dev_mode  = node.querySelector(`#pref--${ver}-dev-mode`)
 		const switch_enabled   = node.querySelector(`#pref--${ver}-game-enabled`)
 
+		const arg_cheats = node.querySelector(`#pref--${ver}-game-args-cheat`)
+		const arg_video  = node.querySelector(`#pref--${ver}-game-args-video`)
+
 		const updater = () => {
 			window.settings.dev().then((dev) => {
 				this.currentDev = dev
@@ -1577,7 +1583,26 @@ class PrefLib {
 					value_game_path.value = value
 				})
 				window.settings.get(`game_args_${ver}`).then((value) => {
+					const args_split = new Set(value.split(' '))
+
+					if ( args_split.has('-cheats') ) {
+						arg_cheats.classList.remove('btn-outline-danger')
+						arg_cheats.classList.add('btn-success')
+					} else {
+						arg_cheats.classList.add('btn-outline-danger')
+						arg_cheats.classList.remove('btn-success')
+					}
+
+					if ( args_split.has('-skipStartVideos') ) {
+						arg_video.classList.remove('btn-outline-danger')
+						arg_video.classList.add('btn-success')
+					} else {
+						arg_video.classList.add('btn-outline-danger')
+						arg_video.classList.remove('btn-success')
+					}
+
 					value_args.value = value
+
 				})
 				window.settings.get(`game_enabled_${ver}`).then((value) => {
 					switch_enabled.checked = value
@@ -1585,6 +1610,38 @@ class PrefLib {
 				switch_dev_mode.checked = this.currentDev[ver]
 			})
 		}
+
+		arg_video.addEventListener('click', () => {
+			window.settings.get(`game_args_${ver}`).then((currentValue) => {
+				const args_split = new Set(currentValue.split(' '))
+
+				if ( args_split.has('-skipStartVideos') ) {
+					args_split.delete('-skipStartVideos')
+				} else {
+					args_split.add('-skipStartVideos')
+				}
+
+				window.settings.set(`game_args_${ver}`, [...args_split].join(' ')).then(() => {
+					updater()
+				})
+			})
+		})
+
+		arg_cheats.addEventListener('click', () => {
+			window.settings.get(`game_args_${ver}`).then((currentValue) => {
+				const args_split = new Set(currentValue.split(' '))
+
+				if ( args_split.has('-cheats') ) {
+					args_split.delete('-cheats')
+				} else {
+					args_split.add('-cheats')
+				}
+
+				window.settings.set(`game_args_${ver}`, [...args_split].join(' ')).then(() => {
+					updater()
+				})
+			})
+		})
 
 		button_game_path.addEventListener('click', () => {
 			window.settings.setGamePath(ver)

@@ -653,6 +653,8 @@
 	"user_pref_setting_discord_2"           : "Détail du Discord personnalisé (blanc = collection active)",
 	"user_pref_setting_game_args"           : "Arguments de jeu",
 	"user_pref_setting_game_args_example"   : "(e.g. <em>-cheats -skipStartVideos -scriptDebug -autoStartSavegameId ##</em>)",
+	"user_pref_setting_game_cheats"         : "Activer/désactiver les tricheries",
+	"user_pref_setting_game_video"          : "Activer/désactiver la vidéo d'introduction",
 	"user_pref_setting_lock_lang"           : "Ignorer la détection de langue au démarrage",
 	"user_pref_tab_advanced"                : "Avancé",
 	"user_pref_tab_display"                 : "Affichage",
