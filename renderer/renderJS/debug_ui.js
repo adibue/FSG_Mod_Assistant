@@ -8,6 +8,14 @@
 
 /* global MA */
 
+window.operations.receive('select:all', () => {
+	const selection = window.getSelection()
+	const range     = document.createRange()
+	range.selectNodeContents(MA.byId('debug_log'))
+	selection.removeAllRanges()
+	selection.addRange(range)
+})
+
 // MARK: PAGE LOAD
 window.addEventListener('DOMContentLoaded', () => {
 	window.state = new windowState()
