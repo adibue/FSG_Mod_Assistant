@@ -667,6 +667,8 @@
 	"user_pref_setting_discord_2"           : "Custom Discord Detail (blank = Active Collection)",
 	"user_pref_setting_game_args"           : "游戏参数",
 	"user_pref_setting_game_args_example"   : "（例如：<em>-cheats -skipStartVideos -scriptDebug -autoStartSavegameId ##</em>）",
+	"user_pref_setting_game_cheats"         : "启用/禁用作弊器",
+	"user_pref_setting_game_video"          : "启用/禁用介绍视频",
 	"user_pref_setting_lock_lang"           : "启动时跳过语言检测",
 	"user_pref_tab_advanced"                : "Advanced",
 	"user_pref_tab_display"                 : "Display",

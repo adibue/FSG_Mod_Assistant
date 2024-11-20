@@ -667,6 +667,8 @@
 	"user_pref_setting_discord_2"           : "Aangepast Discord Detail (leeg = actieve collectie)",
 	"user_pref_setting_game_args"           : "Spelargumenten",
 	"user_pref_setting_game_args_example"   : "(b.v. <em>-cheats -skipStartVideos -scriptDebug -autoStartSavegameId ##</em>)",
+	"user_pref_setting_game_cheats"         : "Cheats in-/uitschakelen",
+	"user_pref_setting_game_video"          : "Introvideo inschakelen/uitschakelen",
 	"user_pref_setting_lock_lang"           : "Taaldetectie bij het opstarten overslaan",
 	"user_pref_tab_advanced"                : "Geavanceerd",
 	"user_pref_tab_display"                 : "Weergave",

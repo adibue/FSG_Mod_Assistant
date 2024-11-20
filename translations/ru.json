@@ -667,6 +667,8 @@
 	"user_pref_setting_discord_2"           : "Пользовательская информация о Discord (пусто = Активная коллекция)",
 	"user_pref_setting_game_args"           : "Параметры запуска",
 	"user_pref_setting_game_args_example"   : "(например: <em>-cheats -skipStartVideos -scriptDebug -autoStartSavegameId ##</em>)",
+	"user_pref_setting_game_cheats"         : "Включить/выключить читы",
+	"user_pref_setting_game_video"          : "Включение/выключение вступительного видео",
 	"user_pref_setting_lock_lang"           : "Пропустить определение языка при запуске",
 	"user_pref_tab_advanced"                : "Дополнительно",
 	"user_pref_tab_display"                 : "Стиль",

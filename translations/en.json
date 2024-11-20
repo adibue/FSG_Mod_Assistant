@@ -667,6 +667,8 @@
 	"user_pref_setting_discord_2"           : "Custom Discord Detail (blank = Active Collection)",
 	"user_pref_setting_game_args"           : "Game Arguments",
 	"user_pref_setting_game_args_example"   : "(e.g. <em>-cheats -skipStartVideos -scriptDebug -autoStartSavegameId ##</em>)",
+	"user_pref_setting_game_cheats"         : "Enable/Disable Cheats",
+	"user_pref_setting_game_video"          : "Enable/Disable Intro Video",
 	"user_pref_setting_lock_lang"           : "Skip language detection on start",
 	"user_pref_tab_advanced"                : "Advanced",
 	"user_pref_tab_display"                 : "Display",

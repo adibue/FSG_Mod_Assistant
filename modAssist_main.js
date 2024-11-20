@@ -883,6 +883,7 @@ ipcMain.handle('state:all', () => { return {
 	foldersDirty       : serveIPC.isFoldersDirty,
 	gameRunning        : serveIPC.isGameRunning,
 	gameRunningEnabled : serveIPC.isGamePolling,
+	keepLoaderModal    : serveIPC.isProcessing || serveIPC.isDownloading,
 	pinMini            : serveIPC.windowLib.isAlwaysOnTop('mini'),
 	prefDanger         : serveIPC.isPrefWrong,
 	updateReady        : serveIPC.modCollect.updateIsReady,
@@ -951,6 +952,7 @@ async function processModFolders(force = false) {
 modQueueRunner.on('process-mods-done', () => {
 	funcLib.general.toggleFolderDirty(false)
 	funcLib.gameSet.read()
+	funcLib.gameSet.gameXML(25)
 	funcLib.gameSet.gameXML(22)
 	funcLib.gameSet.gameXML(19)
 	funcLib.gameSet.gameXML(17)

@@ -269,6 +269,7 @@ const DATA = {
 	},
 	escapeDesc    : ( text ) => typeof text === 'string' ? text.replaceAll(/&/g, '&amp;').replaceAll(/<(?!(a |\/a))/g, '&lt;') : text === null ? '' : text.toString(),
 	escapeSpecial : ( text ) => typeof text === 'string' ? DATA.unescapeText(text).replaceAll(/&/g, '&amp;').replaceAll(/</g, '&lt;').replaceAll(/>/g, '&gt;').replaceAll(/"/g, '&quot;').replaceAll(/'/g, '&#39;') : text === null ? '' : text.toString(),
+	escapeSpecialLC : ( text ) => DATA.escapeSpecial(text).toLowerCase(),
 	unescapeText  : (encodedString) => {
 		const translate_re = /&(nbsp|amp|quot|lt|gt);/g
 		const translate = {
