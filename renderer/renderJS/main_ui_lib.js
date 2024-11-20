@@ -114,12 +114,12 @@ class StateManager {
 		this.mapCollectionDropdown = new Map()
 		this.mapCollectionDropdown.set(0, `--${data.opts.l10n.disable}--`)
 	}
-	doL10N(item) {
+	doL10N(item, lowerCase = false) {
 		let returnText = item?.[this.track.currentLocale]
 		returnText ??= item?.en
 		returnText ??= item?.de
 		returnText ??= '--'
-		return DATA.escapeSpecial(returnText)
+		return lowerCase ? DATA.escapeSpecial(returnText).toLowerCase() : DATA.escapeSpecial(returnText)
 	}
 
 	// MARK: process data
@@ -666,8 +666,10 @@ class StateManager {
 	#addExtraInfo(item) {
 		return item.length !== 0 ? DATA.escapeSpecial(item.join(', ')) : '--'
 	}
+	#findExtraInfo(item) {
+		return item.map((x) => x.toLowerCase()).join(' ')
+	}
 	// MARK: addMod
-	/* eslint-disable-next-line complexity */
 	async #addMod(thisMod, overBadges = null, isHolding = false) {
 		const mod = {
 			filters : new Set(thisMod?.displayBadges?.map?.((x) => x.name) || []),
@@ -675,11 +677,11 @@ class StateManager {
 			scroll  : document.createElement('scroller-item'),
 			search  : {
 				find_author  : DATA.escapeSpecial(thisMod.modDesc.author).toLowerCase(),
-				find_brand   : thisMod.has_brands.map((x) => x.toLowerCase()).join(' '),
-				find_cats    : thisMod.has_cats.map((x) => x.toLowerCase()).join(' '),
+				find_brand   : this.#findExtraInfo(thisMod.has_brands),
+				find_cats    : this.#findExtraInfo(thisMod.has_cats),
 				find_name    : thisMod.fileDetail.shortName.toLowerCase(),
-				find_title   : this.doL10N(thisMod.l10n.title).toLowerCase(),
-				find_version : this.doL10N(thisMod.modDesc.version).toLowerCase(),
+				find_title   : this.doL10N(thisMod.l10n.title, true),
+				find_version : this.doL10N(thisMod.modDesc.version, true),
 			},
 		}
 		mod.search.find_all = Object.values(mod.search).join(' ')
@@ -721,7 +723,7 @@ class StateManager {
 			brands     : this.#addExtraInfo(fixBrand),
 			categories : this.#addExtraInfo(fixCat),
 			fileDate   : thisMod.fileDetail.fileDate.slice(0, 10),
-			fileSize   : ( thisMod.fileDetail.fileSize > 0 ) ? await DATA.bytesToHR(thisMod.fileDetail.fileSize) : '',
+			fileSize   : await DATA.bytesToHR(thisMod.fileDetail.fileSize),
 			fileTime   : thisMod.fileDetail.fileDate.slice(11, 16),
 			folderIcon : thisMod.badgeArray.includes('folder') ? '<i class="bi bi-folder2-open mod-folder-overlay"></i>' : '',
 			iconImage  : `<img alt="" class="img-fluid" src="${DATA.iconMaker(thisMod.modDesc.iconImage)}">`,
@@ -735,8 +737,7 @@ class StateManager {
 		if ( overBadges !== null ) {
 			badgeContain.innerHTML = overBadges
 		} else {
-			const suppressFilter = isHolding ? '' : `fs${this.flag.currentVersion}`
-			for ( const badge of thisMod?.displayBadges?.filter?.((x) => x.name !== suppressFilter) || [] ) {
+			for ( const badge of thisMod?.displayBadges?.filter?.((x) => isHolding || x.name !== `fs${this.flag.currentVersion}`) || [] ) {
 				badgeContain.appendChild(I18N.buildBadgeMod(badge))
 			}
 		}
@@ -2150,7 +2151,7 @@ class FileLib {
 			folderIcon : mod.fileDetail.isFolder ? '<i class="bi bi-folder2-open mod-folder-overlay"></i>' : '',
 			iconImage  : `<img alt="" class="img-fluid" src="${DATA.iconMaker(mod.modDesc.iconImage)}">`,
 			shortname  : mod.fileDetail.shortName,
-			title      : this.doL10N(mod.l10n.title),
+			title      : window.state.doL10N(mod.l10n.title),
 		})
 	}
 
@@ -2258,6 +2259,7 @@ class FileLib {
 
 		if ( mode !== 'delete' ) {
 			for ( const [key, info] of window.state.mapCollectionFiles ) {
+				if ( key === mods.originCollectKey ) { continue }
 				const node = DATA.templateEngine('file_op_collect_option', {
 					icon : DATA.makeFolderIcon(
 						false,

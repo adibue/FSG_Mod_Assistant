@@ -47,6 +47,7 @@ const catTitleMap = {
 }
 /* cSpell: enable */
 
+// TODO: add new
 const selectFills = [
 	{ filltype : 'barley', l10n : '$l10n_fillType_barley' },
 	{ filltype : 'carrot', l10n : '$l10n_fillType_carrots' },
@@ -144,6 +145,8 @@ function getTopCat(cat) {
 					type  : 'brand',
 				}))
 		case 'fills' :
+			// TODO - FILTER IF VEHICLE HAS ANY
+			// getByFill(fillType).length
 			return selectFills.map((x) => buildCategoryItem({
 				image      : `<fillType class="h0" name="fill-${x.filltype}"></fillType>`,
 				page       : x.filltype,
