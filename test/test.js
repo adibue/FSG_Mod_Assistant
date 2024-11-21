@@ -34,7 +34,6 @@ serveIPC.log.forceNoConsole()
 serveIPC.isBotDisabled      = true
 serveIPC.isModCacheDisabled = true
 
-serveIPC.storeCacheDetail = fakeStore
 serveIPC.storeNote        = fakeStore
 serveIPC.storeSet         = fakeStore
 serveIPC.storeSites       = fakeStore

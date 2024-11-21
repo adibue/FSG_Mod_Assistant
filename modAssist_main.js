@@ -75,7 +75,6 @@ serveIPC.storeSet         = new Store({schema : settingDefault.defaults, migrati
 serveIPC.storeCache       = new (require('./lib/modUtilLib.js')).modCacheManager(app.getPath('userData'))
 serveIPC.storeSites       = new Store({name : 'mod_source_site', migrations : settingDefault.migrateSite, clearInvalidConfig : true})
 serveIPC.storeNote        = new Store({name : 'col_notes', clearInvalidConfig : true})
-serveIPC.storeCacheDetail = new Store({name : 'mod_detail_cache', clearInvalidConfig : true})
 
 serveIPC.windowLib.loadSettings()
 
@@ -312,15 +311,8 @@ ipcMain.handle('i18n:get', async (_, key, version = 22) => {
 			try {
 				const cacheSize = fs.statSync(path.join(app.getPath('userData'), 'mod_cache.json')).size/(1024*1024)
 				const iconSize  = fs.statSync(path.join(app.getPath('userData'), 'mod_icons.json')).size/(1024*1024)
-				return serveIPC.l10n.getTextOverride(key, 22, { suffix : ` ${cacheSize.toFixed(2)}MB / ${iconSize.toFixed(2)}MB` })
-			} catch {
-				return serveIPC.l10n.getTextOverride(key, 22, { suffix : ' 0.00MB' })
-			}
-		}
-		case 'clean_detail_cache_size' : {
-			try {
-				const cacheSize = fs.statSync(path.join(app.getPath('userData'), 'mod_detail_cache.json')).size/(1024*1024)
-				return serveIPC.l10n.getTextOverride(key, 22, { suffix : ` ${cacheSize.toFixed(2)}MB` })
+				const itemSize  = fs.statSync(path.join(app.getPath('userData'), 'mod_items.json')).size/(1024*1024)
+				return serveIPC.l10n.getTextOverride(key, 22, { suffix : ` ${cacheSize.toFixed(2)}MB / ${iconSize.toFixed(2)}MB / ${itemSize.toFixed(2)}MB` })
 			} catch {
 				return serveIPC.l10n.getTextOverride(key, 22, { suffix : ' 0.00MB' })
 			}
@@ -671,10 +663,6 @@ ipcMain.on('settings:clearMalware', () => {
 	serveIPC.storeSet.set('suppress_malware', [])
 	processModFolders(true)
 })
-ipcMain.on('settings:clearDetail', () => {
-	serveIPC.storeCacheDetail.clear()
-	return true
-})
 ipcMain.on('cache:clear', () => {
 	serveIPC.storeCache.clearAll()
 	serveIPC.windowLib.forceFocus('main')
@@ -683,10 +671,6 @@ ipcMain.on('cache:clear', () => {
 ipcMain.on('cache:malware', () => {
 	serveIPC.storeSet.set('suppress_malware', [])
 	processModFolders(true)
-})
-ipcMain.on('cache:detail', () => {
-	serveIPC.storeCacheDetail.clear()
-	serveIPC.windowLib.sendToValidWindow('main', 'settings:invalidate')
 })
 ipcMain.on('cache:clean', () => {
 	const md5Set     = new Set(serveIPC.storeCache.keys)

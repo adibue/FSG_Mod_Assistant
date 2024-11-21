@@ -1491,9 +1491,7 @@ class PrefLib {
 					'<i18n-text class="inset-block-header" data-key="user_pref_title_clean_cache"></i18n-text>',
 					'<i18n-text class="inset-block-blurb-option" data-key="user_pref_blurb_clean_cache"></i18n-text>',
 					'<i18n-text class="inset-block-blurb-option text-body-emphasis py-1" data-key="clean_cache_size" id="clean_cache_size"></i18n-text>',
-					'<i18n-text class="inset-block-blurb-option text-body-emphasis py-1" data-key="clean_detail_cache_size" id="clean_detail_cache_size"></i18n-text>',
 					'<i18n-text class="d-block btn btn-success btn-sm w-75 mt-2 mx-auto mb-3" id="pref--cache-clean-btn" data-key="user_pref_button_clean_cache"></i18n-text>',
-					'<i18n-text class="d-block btn btn-warning btn-sm w-75 mt-2 mx-auto mb-3" id="pref--cache-clean-detail-btn" data-key="user_pref_button_clear_detail_cache"></i18n-text>',
 					'<i18n-text class="inset-block-blurb-option" data-key="user_pref_blurb_clear_cache"></i18n-text>',
 					'<i18n-text class="d-block btn btn-danger btn-sm w-75 mt-2 mx-auto" id="pref--cache-clear-btn" data-key="user_pref_button_clear_cache"></i18n-text>',
 					'<i18n-text class="inset-block-blurb-option mt-2" data-key="user_pref_blurb_clear_malware"></i18n-text>',
@@ -1504,14 +1502,10 @@ class PrefLib {
 				this.update.push(() => {
 					MA.byId('clear_malware_size').setAttribute('refresh', 'true')
 					MA.byId('clean_cache_size').setAttribute('refresh', 'true')
-					MA.byId('clean_detail_cache_size').setAttribute('refresh', 'true')
 				})
 
 				node.querySelector('#pref--cache-clean-btn').addEventListener('click', () => {
 					window.main_IPC.cache.clean()
-				})
-				node.querySelector('#pref--cache-clean-detail-btn').addEventListener('click', () => {
-					window.main_IPC.cache.detail()
 				})
 				node.querySelector('#pref--cache-clear-btn').addEventListener('click', () => {
 					window.main_IPC.cache.clear()
