@@ -6,7 +6,7 @@
 // MARK: BASE GAME UI
 
 /* global I18N, MA, DATA, icons, client_BGData, ft_doReplace, client_BuilderPlace, client_BuilderVehicle */
-let version    = 22
+let version    = 25
 let locale     = 'en'
 let i18nUnits  = null
 let searchTree = {}
