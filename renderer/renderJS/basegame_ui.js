@@ -108,18 +108,25 @@ function getTopCat(cat) {
 		'sales',
 		'chainsaws',
 	])
+	const skip_joint = new Set([
+		'train',
+		'bigbag'
+	])
 	switch ( cat ) {
 		case 'non-place' : {
 			const catArray = []
 			for ( const catName of Object.keys(client_BGData.category).sort() ) {
-				if ( catName === 'placeable' ) { continue }
+				if ( catName === 'placeable' || catName === 'none' ) { continue }
 				catArray.push(
 					`<div class="w-100 pb-3 fs-2 text-center top-0 z-3 bg-body"><div class="w-75 mx-auto"><i18n-text data-version="${version}" data-key="${catTitleMap[catName]}"></i18n-text></div></div>`,
 					...client_BGData.category[catName]
 						.filter((x) => !skip_cats.has(x.key))
+						.filter((x) => client_BGData.catKeyToVehicle[x.key].length !== 0 )
 						.sort((a, b) => Intl.Collator().compare(a.key, b.key))
 						.map((x) => buildCategoryItem({
-							image      : `<img src="${icons.item(x.iconFile)}" style="width:160px">`,
+							// image      : `<img src="${icons.item(x.iconFile)}" style="width:160px">`,
+							image      : `<img src="${icons.forcePointer(client_BGData.vehicles[client_BGData.catKeyToVehicle[x.key][0]].iconOrig)}" style="width:160px">`,
+							
 							page       : x.key,
 							text       : x.title,
 							type       : 'subcat',
@@ -131,8 +138,9 @@ function getTopCat(cat) {
 		case 'placeable' :
 			return client_BGData.category.placeable
 				.sort((a, b) => Intl.Collator().compare(a.key, b.key))
+				.filter((x) => client_BGData.catKeyToPlaceable[x.key].length !== 0 )
 				.map((x) => buildCategoryItem({
-					image      : `<img src="${icons.item(x.iconFile)}" style="width:160px">`,
+					image      : `<img src="${icons.item(client_BGData.placeables[client_BGData.catKeyToPlaceable[x.key][0]].iconOrig)}" style="width:160px">`,
 					page       : x.key,
 					text       : x.title,
 					type       : 'subcat',
@@ -160,20 +168,20 @@ function getTopCat(cat) {
 				}))
 		case 'attach_need' :
 			return Object.keys(client_BGData.jointNeedToVehicle)
-				.filter((x) => x.toLowerCase() !== 'train' )
+				.filter((x) => !skip_joint.has(x.toLowerCase()) )
 				.sort()
 				.map((x) => buildCategoryItem({
-					image      : `<img src="img/baseCategory/attach_${x.toLowerCase()}.webp" style="width:160px">`,
+					image      : `<img src="${icons.forcePointer(client_BGData.vehicles[client_BGData.jointNeedToVehicle[x][0]].iconOrig)}" style="width:160px">`,
 					page       : x.toLowerCase(),
 					text       : x,
 					type       : 'attach_need',
 				}))
 		case 'attach_has' :
 			return Object.keys(client_BGData.jointHasToVehicle)
-				.filter((x) => x.toLowerCase() !== 'train' )
+				.filter((x) => !skip_joint.has(x.toLowerCase()) )
 				.sort()
 				.map((x) => buildCategoryItem({
-					image      : `<img src="img/baseCategory/attach_${x.toLowerCase()}.webp" style="width:160px">`,
+					image      : `<img src="${icons.forcePointer(client_BGData.vehicles[client_BGData.jointHasToVehicle[x][0]].iconOrig)}" style="width:160px">`,
 					page       : x.toLowerCase(),
 					text       : x,
 					type       : 'attach_has',
@@ -314,7 +322,7 @@ function pageTitle(title, { compareAll = false, openFolder = false, preTranslate
 	titleDiv.classList.add('w-100', 'pb-3', 'fs-2', 'text-center', 'position-sticky', 'top-0', 'z-3', 'bg-body')
 	titleDiv.innerHTML = [
 		'<div class="w-75 mx-auto">',
-		preTranslated ? title : I18N.defer(title, skipIfNotBase),
+		preTranslated ? title : skipIfNotBase ? I18N.unwrap_base(title, version) : I18N.defer(title, skipIfNotBase),
 		'</div>',
 		'<div style="margin-top: -1.6em; text-align: start">',
 		'<button type="button" class="btn btn-outline-primary" id="backButton"><i18n-text data-key="basegame_button_back"></i18n-text></button>',
@@ -338,6 +346,8 @@ window.addEventListener('DOMContentLoaded', async () => {
 	const pageType      = urlParams.get('type')
 	const pageID        = urlParams.get('page')
 
+	window.log.debug('Basegame', pageType, pageID)
+
 	version   = window.location.pathname.substring(window.location.pathname.length -7, window.location.pathname.length -5)
 	locale    = await window.i18n.lang()
 	i18nUnits = await window.settings.units()
@@ -356,7 +366,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 			const catL10n      = client_BGData.catKeyToTitle[pageID]
 			const catContent   = ((isVehicleCat ? client_BGData.catKeyToVehicle[pageID] : client_BGData.catKeyToPlaceable[pageID]) ?? []).sort()
 
-			MA.byId('bgContent').appendChild(pageTitle(catL10n, {compareAll : true}))
+			MA.byId('bgContent').appendChild(pageTitle(catL10n, {skipIfNotBase : true, compareAll : true}))
 
 			for ( const element of catContent.sort().map((x) => buildItem(x, !isVehicleCat)) ) {
 				MA.byId('bgContent').appendChild(element)
@@ -419,7 +429,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 		case 'item' : {
 			const itemType       = client_BGData.itemKeyToType[pageID]
 			const thisItem       = client_BGData?.[itemType]?.[pageID]
-			
+
 			if ( typeof thisItem === 'undefined' ) {
 				MA.byId('homePageContent').clsShow()
 				MA.byId('homePageError').clsShow()
@@ -442,7 +452,6 @@ window.addEventListener('DOMContentLoaded', async () => {
 					version
 				)
 
-
 			if ( thisItem.masterType === 'vehicle' ) {
 				MA.byId('bgContent').appendChild(pageTitle(
 					`${client_BGData.brandKeyToTitle[thisItem.sorting.brand.toUpperCase()]} ${thisItemParsed.name}`,
@@ -454,7 +463,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 				MA.byIdAppend('bgContent', thisHTML)
 				thisItemParsed.doCharts(i18nUnits)
 			} else {
-				MA.byId('bgContent').appendChild(pageTitle(thisItem.name, {skipIfNotBase : true}))
+				MA.byId('bgContent').appendChild(pageTitle(thisItem.sorting.name, {skipIfNotBase : true}))
 				const thisHTML = thisItemParsed.HTML
 				thisHTML.firstElementChild.classList.add('mt-3')
 				MA.byIdAppend('bgContent', thisHTML)
