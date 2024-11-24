@@ -970,6 +970,8 @@ class client_BuilderPlace {
 	doSideBar() {
 		this.#html_arr.sidebar = []
 
+		console.log(this.#item.animals)
+		console.log(`fill-${this.#item.animals.husbandryType?.toLowerCase?.()}`)
 		this.#add_sidebar(this.#util.markup_data_ifTrue('price', this.#util.num_default(this.#item.sorting.price)))
 		this.#add_sidebar(this.#util.markup_data_ifTrue('income', this.#util.num_default(this.#item.sorting.incomePerHour)))
 		this.#add_sidebar(this.#util.markup_data_ifTrue('objects', this.#util.num_default(this.#item.storage.objects)))
@@ -979,7 +981,7 @@ class client_BuilderPlace {
 
 		this.#add_sidebar(this.#util.markup_data_ifTrue('bees', this.#util.num_default(this.#item.animals.beehiveRadius)))
 
-		this.#add_sidebar(this.#util.markup_data_ifTrue(
+		this.#add_sidebar(this.#util.markup_row_ifTrue(
 			`fill-${this.#item.animals.husbandryType?.toLowerCase?.()}`,
 			this.#util.num_default(this.#item.animals.husbandryAnimals)
 		))
