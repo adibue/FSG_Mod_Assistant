@@ -467,7 +467,7 @@ ipcMain.on('context:mod', async (event, modID, modIDs) => {
 				label : serveIPC.modCollect.mapCollectionToName(collectKey),
 				click : () => {
 					serveIPC.windowLib.createNamedWindow('save', { collectKey : collectKey })
-					setTimeout(() => { saveCompare_read(thisPath, thisMod.fileDetail.isFolder) }, 250)
+					setTimeout(() => { saveCompare_read(thisPath, thisMod.fileDetail.isFolder) }, 500)
 				},
 				icon  : serveIPC.windowLib.contextIcons.collection,
 			}))
@@ -743,7 +743,7 @@ ipcMain.on('file:exportZIP', (_, mods) => { funcLib.general.exportZIP(mods) })
 ipcMain.on('dispatch:savemanage', () => { funcLib.saveManage.refresh() })
 ipcMain.on('savemanage:compare', (_, fullPath, collectKey) => {
 	serveIPC.windowLib.createNamedWindow('save', { collectKey : collectKey })
-	setTimeout(() => { saveCompare_read(fullPath, true) }, 250)
+	setTimeout(() => { saveCompare_read(fullPath, true) }, 500)
 })
 ipcMain.on('savemanage:delete',  (_, fullPath) => { funcLib.saveManage.delete(fullPath) })
 ipcMain.on('savemanage:export',  (_, fullPath) => { funcLib.saveManage.export(fullPath) })
@@ -799,7 +799,7 @@ function saveCompare_read(thisPath) {
 		const saveResult = JSON.parse(parseSaveGame(thisPath))
 		serveIPC.windowLib.sendModList({ thisSaveGame : saveResult }, 'save:saveInfo', 'save', false )
 	} catch (err) {
-		serveIPC.log.danger('save-check', 'Load failed', err)
+		serveIPC.log.danger('save-check', 'Load failed', thisPath, err.message)
 	}
 }
 function saveCompare_open(zipMode = false) {

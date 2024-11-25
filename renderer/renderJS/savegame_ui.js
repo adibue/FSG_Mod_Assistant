@@ -279,7 +279,7 @@ class WindowState {
 		const modCollect = this.cacheSaveGame
 		const savegame   = modCollect.opts.thisSaveGame
 		const isCSV      = savegame.mapMod === 'csvLoaded'
-		const {haveModSet, fullModSet} = this.getSets(modCollect.modList[this.collectKey].mods, Object.keys(savegame.mods))
+		const {haveModSet, fullModSet} = this.getSets(modCollect.modList[this.collectKey].mods, Object.keys(savegame.mods || {}))
 		const modSetHTML = []
 
 		this.detailSend = { collectKey : this.collectKey, modList : {} }
@@ -306,7 +306,7 @@ class WindowState {
 				thisModDetail.version  = savegame.mods[thisMod].version
 				thisModDetail.title    = savegame.mods[thisMod].title
 				thisModDetail.isLoaded = true
-				thisModDetail.isUsed   = isCSV || savegame.mods[thisMod].farms.size !== 0
+				thisModDetail.isUsed   = isCSV || savegame.mods[thisMod].farms.length !== 0
 				thisModDetail.usedBy   = this.getFarms(savegame.mods[thisMod].farms, savegame.farms)
 			}
 	
@@ -509,12 +509,10 @@ class DragDropLib {
 			const dt    = e.dataTransfer
 			const files = dt.files
 
-			const thisPath = files[0].path
-
 			if ( this.isFolder ) {
-				window.savegame_IPC.drop.folder(thisPath)
+				window.savegame_IPC.drop.folder(files[0])
 			} else {
-				window.savegame_IPC.drop.file(thisPath)
+				window.savegame_IPC.drop.file(files[0])
 			}
 		}
 

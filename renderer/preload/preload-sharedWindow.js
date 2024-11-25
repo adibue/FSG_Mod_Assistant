@@ -213,8 +213,8 @@ const pageAPI = {
 		functions : {
 			cacheDetails   : (content) => ipcRenderer.send('save:cacheGameSave', content),
 			drop : {
-				folder : (path)  => { ipcRenderer.send('save:drop', 'folder', path)},
-				file   : (path)  => { ipcRenderer.send('save:drop', 'zip', path)},
+				folder : (path)  => { ipcRenderer.send('save:drop', 'folder', webUtils.getPathForFile(path))},
+				file   : (path)  => { ipcRenderer.send('save:drop', 'zip', webUtils.getPathForFile(path))},
 			},
 			open : {
 				folder     : ()      => { ipcRenderer.send('save:folder')},
