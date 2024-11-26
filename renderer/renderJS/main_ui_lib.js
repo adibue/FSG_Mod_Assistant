@@ -72,6 +72,11 @@ class StateManager {
 		this.modal.modInfo  = new ModalOverlay('#open_mod_info_modal')
 
 		window.main_IPC.receive('status:all', () => this.updateState() )
+		window.main_IPC.receive('files:deleteTrigger', () => {
+			if ( this.track.selected.size !== 0 ) {
+				this.startFile('delete')
+			}
+		})
 	}
 
 	#updateTracking(data) {
@@ -664,12 +669,13 @@ class StateManager {
 	}
 
 	#addExtraInfo(item) {
-		return item.length !== 0 ? DATA.escapeSpecial(item.join(', ')) : '--'
+		return item.length !== 0 ? DATA.escapeSpecial(item.join(', ')) : null
 	}
 	#findExtraInfo(item) {
 		return item.map((x) => x.toLowerCase()).join(' ')
 	}
 	// MARK: addMod
+	/* eslint-disable-next-line complexity */
 	async #addMod(thisMod, overBadges = null, isHolding = false) {
 		const mod = {
 			filters : new Set(thisMod?.displayBadges?.map?.((x) => x.name) || []),
@@ -718,17 +724,26 @@ class StateManager {
 		const fixCat   = [...new Set(thisMod.has_cats.map((x) => x.split(' ')).flat())].sort()
 		const fixBrand = [...new Set(thisMod.has_brands.map((x) => x.split(' ')).flat())].sort()
 
+		const brandTitle = [
+			fixBrand.length !== 0 ? `<strong>${this.#addExtraInfo(fixBrand)}</strong>` : null,
+			fixBrand.length !== 0 ? '--' : null,
+			this.doL10N(thisMod.l10n.title)
+		]
+		const authorCat = [
+			DATA.escapeSpecial(thisMod.modDesc.author),
+			fixCat.length !== 0 ? '--' : null,
+			fixCat.length !== 0 ? `<em>${this.#addExtraInfo(fixCat)}</em>` : null,
+		]
+
 		mod.node.appendChild(DATA.templateEngine('item_mod', {
-			author     : DATA.escapeSpecial(thisMod.modDesc.author),
-			brands     : this.#addExtraInfo(fixBrand),
-			categories : this.#addExtraInfo(fixCat),
+			author_cat : authorCat.filter((x) => x !== null).join(' '),
+			brand_title : brandTitle.filter((x) => x !== null).join(' '),
 			fileDate   : thisMod.fileDetail.fileDate.slice(0, 10),
 			fileSize   : await DATA.bytesToHR(thisMod.fileDetail.fileSize),
 			fileTime   : thisMod.fileDetail.fileDate.slice(11, 16),
 			folderIcon : thisMod.badgeArray.includes('folder') ? '<i class="bi bi-folder2-open mod-folder-overlay"></i>' : '',
 			iconImage  : `<img alt="" class="img-fluid" src="${DATA.iconMaker(thisMod.modDesc.iconImage)}">`,
 			shortname  : thisMod.fileDetail.shortName,
-			title      : this.doL10N(thisMod.l10n.title),
 			version    : DATA.escapeSpecial(thisMod.modDesc.version),
 		}))
 

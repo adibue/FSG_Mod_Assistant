@@ -163,6 +163,7 @@ const pageAPI = {
 			},
 		},
 		validAsync : new Set([
+			'files:deleteTrigger',
 			'files:operation',
 			'loading:current',
 			'loading:download',
