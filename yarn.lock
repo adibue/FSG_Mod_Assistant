@@ -2320,16 +2320,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"electron@npm:^32.2.5":
-  version: 32.2.5
-  resolution: "electron@npm:32.2.5"
+"electron@npm:^33.2.0":
+  version: 33.2.0
+  resolution: "electron@npm:33.2.0"
   dependencies:
     "@electron/get": ^2.0.0
     "@types/node": ^20.9.0
     extract-zip: ^2.0.1
   bin:
     electron: cli.js
-  checksum: e1861147b1c203eb06ea68d8051425a377f542cfb3aad23890011080f8b43f0e1b0d4c4cd6a0fc4b4c27bc5e1b08c5c32b467f9d0b849b82576981dbad12c982
+  checksum: 4feacc8923fe4ab45da45d34823f949231da425c83ea2db2e483c2531f0320a1279a5b65913f447e145ab0a3f4e190bc192ed3a63ebe17a06347156e2ec52081
   languageName: node
   linkType: hard
 
@@ -2962,7 +2962,7 @@ __metadata:
     deepmerge: ^4.3.1
     discord-rpc: ^4.0.1
     docolatte: ^4.5.1
-    electron: ^32.2.5
+    electron: ^33.2.0
     electron-builder: ~25.0.6
     electron-store: ^8.2.0
     electron-updater: ^6.3.9
@@ -2972,7 +2972,7 @@ __metadata:
     fs_mod_parser_neon: ^0.1.1
     glob: ^11.0.0
     globals: ^15.12.0
-    html-validate: ^8.25.0
+    html-validate: ^8.25.1
     jsdoc: ^4.0.4
     node-stream-zip: ^1.15.0
     unzip-stream: ^0.3.4
@@ -3276,9 +3276,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"html-validate@npm:^8.25.0":
-  version: 8.25.0
-  resolution: "html-validate@npm:8.25.0"
+"html-validate@npm:^8.25.1":
+  version: 8.25.1
+  resolution: "html-validate@npm:8.25.1"
   dependencies:
     "@html-validate/stylish": ^4.1.0
     "@sidvind/better-ajv-errors": 3.0.1
@@ -3306,7 +3306,7 @@ __metadata:
       optional: true
   bin:
     html-validate: bin/html-validate.js
-  checksum: 28932fb64ba887e5512ddb9b9e74eda5a4fec10db74a2c865181b0bb616fc2f6751d6704f705bb0dc893086a1fe0b252a1b613db7a4742eb13e4a11aab1ca1da
+  checksum: 90d0671099c4a680abee883f29d724af48991a3155d260342b14b378f246e1a97be4365ad75104ef210a4886b1d015e43e93b3be73f16c32edced950121131ad
   languageName: node
   linkType: hard
 

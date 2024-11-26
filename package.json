@@ -1,6 +1,6 @@
 {
   "name": "fsg-mod-assistant",
-  "version": "5.9.82",
+  "version": "5.9.90",
   "description": "FSG Farm Sim Mod Assistant",
   "main": "modAssist_main.js",
   "homepage": "https://github.com/FSGModding/FSG_Mod_Assistant#readme",
@@ -32,12 +32,12 @@
     "deepl-node": "^1.15.0",
     "deepmerge": "^4.3.1",
     "docolatte": "^4.5.1",
-    "electron": "^32.2.5",
+    "electron": "^33.2.0",
     "electron-builder": "~25.0.6",
     "eslint": "^9.15.0",
     "eslint-plugin-unicorn": "^56.0.1",
     "globals": "^15.12.0",
-    "html-validate": "^8.25.0",
+    "html-validate": "^8.25.1",
     "jsdoc": "^4.0.4"
   },
   "dependencies": {
