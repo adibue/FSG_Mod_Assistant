@@ -959,7 +959,7 @@ modQueueRunner.on('process-mods-done', () => {
 			// Always ignore, user has whitelisted file
 			if ( currentSavedIgnoreList.has(thisMod.fileDetail.shortName) ) { continue }
 			// Always ignore, file added to master whitelist
-			if ( serveIPC.whiteMalwareList.has(thisMod.fileDetail.shortName) ) { continue }
+			if ( serveIPC.whiteMalwareList.includes(thisMod.fileDetail.shortName) ) { continue }
 
 			const thisMessage = [
 				__('malware_dialog_intro'),
