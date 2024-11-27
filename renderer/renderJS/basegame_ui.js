@@ -411,7 +411,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 			break
 		}
 		case 'fill' : {
-			const thisTitle    = `${I18N.defer('basegame_fills', false)} : ${I18N.defer(findFill(pageID))}`
+			const thisTitle    = `${I18N.defer('basegame_fills', false)} : ${I18N.unwrap_base(findFill(pageID), version)}`
 			const fillContents = getByFill(pageID).sort()
 
 			MA.byId('bgContent').appendChild(pageTitle(thisTitle, {compareAll : true, preTranslated : true, skipIfNotBase : true}))
