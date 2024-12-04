@@ -1059,16 +1059,6 @@ app.whenReady().then(() => {
 			}
 		})
 
-		// app.setUserTasks([
-		// 	{
-		// 		arguments : '--start-game',
-		// 		description : '',
-		// 		iconIndex : 0,
-		// 		iconPath  : serveIPC.icon.tray,
-		// 		program   : process.execPath,
-		// 		title     : __('launch_game'),
-		// 	}
-		// ])
 
 		serveIPC.windowLib.createMainWindow(() => {
 			if ( serveIPC.storeSet.has('modFolders') ) {

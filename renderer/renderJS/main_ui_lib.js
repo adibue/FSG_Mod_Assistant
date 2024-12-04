@@ -1091,7 +1091,7 @@ class StateManager {
 				
 				return window.main_IPC.folder.active(activePick).then((result) => {
 					if ( this.flag.gameRunning ) {
-						window.l18n.get('game_running_warning').then((entry) => {
+						window.i18n.get('game_running_warning').then((entry) => {
 							alert(entry.entry)
 						})
 					}
