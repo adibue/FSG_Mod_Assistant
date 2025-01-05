@@ -2939,10 +2939,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"fs_mod_parser_neon@npm:^0.1.1":
-  version: 0.1.1
-  resolution: "fs_mod_parser_neon@npm:0.1.1"
-  checksum: af7a4ad50f33ae86eea4569898f197ba77055a66ae72acb02f38cd1c0952bcfd1afaf0f63c45ea497b39bae57e22d80877536f2aab178dd9db35f381abda7d6b
+"fs_mod_parser_neon@npm:^0.1.2":
+  version: 0.1.2
+  resolution: "fs_mod_parser_neon@npm:0.1.2"
+  checksum: 8363483f8d374dd24178a13b9e9a2518b74c2b699d9e24a312ef461ea91462f79b0e23bdf3415436fc0aa3b687a4b0676909f1edaf9679504386f3be63bae121
   languageName: node
   linkType: hard
 
@@ -2969,7 +2969,7 @@ __metadata:
     eslint: ^9.17.0
     eslint-plugin-unicorn: ^56.0.1
     fast-xml-parser: ^4.5.1
-    fs_mod_parser_neon: ^0.1.1
+    fs_mod_parser_neon: ^0.1.2
     glob: ^11.0.0
     globals: ^15.14.0
     html-validate: ^8.29.0

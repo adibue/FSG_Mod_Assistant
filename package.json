@@ -48,7 +48,7 @@
     "electron-store": "^8.2.0",
     "electron-updater": "^6.3.9",
     "fast-xml-parser": "^4.5.1",
-    "fs_mod_parser_neon": "^0.1.1",
+    "fs_mod_parser_neon": "^0.1.2",
     "glob": "^11.0.0",
     "node-stream-zip": "^1.15.0",
     "unzip-stream": "^0.3.4"
