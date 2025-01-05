@@ -579,6 +579,8 @@
 	"select_only__title"                    : "Show Only Selected",
 	"select_pick"                           : "Select",
 	"sort_author"                           : "Sort : Author",
+	"sort_brand"                            : "Sort : Brand",
+	"sort_cat"                              : "Sort : Category",
 	"sort_date"                             : "Sort : File Date",
 	"sort_name"                             : "Sort : Filename",
 	"sort_size"                             : "Sort : Size",

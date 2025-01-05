@@ -579,6 +579,8 @@
 	"select_only__title"                    : "Zobrazit pouze vybrané",
 	"select_pick"                           : "Zvolit",
 	"sort_author"                           : "Třídit : Autor",
+	"sort_brand"                            : "Třídit : Značka",
+	"sort_cat"                              : "Třídit : Kategorie",
 	"sort_date"                             : "Třídit : Datum souboru",
 	"sort_name"                             : "Třídit : Název souboru",
 	"sort_size"                             : "Třídit : Velikost",

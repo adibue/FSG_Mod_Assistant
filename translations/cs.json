@@ -579,6 +579,8 @@
 	"select_only__title"                    : "只显示选中的",
 	"select_pick"                           : "选择",
 	"sort_author"                           : "排序 : 作者",
+	"sort_brand"                            : "排序 : 品牌",
+	"sort_cat"                              : "排序 : 类别",
 	"sort_date"                             : "排序 ：文件日期",
 	"sort_name"                             : "排序 ：文件名",
 	"sort_size"                             : "排序 : 大小",

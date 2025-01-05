@@ -579,6 +579,8 @@
 	"select_only__title"                    : "Nur ausgewählte anzeigen",
 	"select_pick"                           : "Auswählen",
 	"sort_author"                           : "Sortieren: Author",
+	"sort_brand"                            : "Sortierung : Marke",
+	"sort_cat"                              : "Sortieren : Kategorie",
 	"sort_date"                             : "Sortieren: Datei-Datum",
 	"sort_name"                             : "Sortieren: Dateiname",
 	"sort_size"                             : "Sortieren : Größe",

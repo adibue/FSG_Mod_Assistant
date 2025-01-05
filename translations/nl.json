@@ -579,6 +579,8 @@
 	"select_only__title"                    : "Alleen geselecteerde tonen",
 	"select_pick"                           : "Selecteer",
 	"sort_author"                           : "Sorteer : Auteur",
+	"sort_brand"                            : "Sorteer : Merk",
+	"sort_cat"                              : "Sorteer : Categorie",
 	"sort_date"                             : "Sorteren : Datum bestand",
 	"sort_name"                             : "Sorteren : Bestandsnaam",
 	"sort_size"                             : "Sorteer : Grootte",

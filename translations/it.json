@@ -579,6 +579,8 @@
 	"select_only__title"                    : "Mostra Solo Selezionati",
 	"select_pick"                           : "Seleziona",
 	"sort_author"                           : "Ordina: Autore",
+	"sort_brand"                            : "Ordina : Marca",
+	"sort_cat"                              : "Ordina : Categoria",
 	"sort_date"                             : "Ordina : Data Del File",
 	"sort_name"                             : "Ordina: Nome File",
 	"sort_size"                             : "Ordinamento : Dimensione",

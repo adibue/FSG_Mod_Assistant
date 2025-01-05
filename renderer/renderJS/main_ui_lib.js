@@ -129,6 +129,9 @@ class StateManager {
 		return lowerCase ? DATA.escapeSpecial(returnText).toLowerCase() : DATA.escapeSpecial(returnText)
 	}
 
+	emptySort(text) {
+		return text || 'ZZZZ'
+	}
 	// MARK: process data
 	async updateFromData(data) {
 		window.data = data
@@ -166,13 +169,15 @@ class StateManager {
 					for ( const tag of thisModRec.filters ) { this.searchTagList.add(tag) }
 
 					thisCol.sorter.push([
-						MKey,
-						thisModRec.search.find_name,
-						thisModRec.search.find_author,
-						thisModRec.search.find_title,
-						thisModRec.search.find_version,
-						thisMod.fileDetail.fileDate,
-						thisMod.fileDetail.fileSize,
+						/* 0 */ MKey,
+						/* 1 */ thisModRec.search.find_name,
+						/* 2 */ thisModRec.search.find_author,
+						/* 3 */ thisModRec.search.find_title,
+						/* 4 */ thisModRec.search.find_version,
+						/* 5 */ thisMod.fileDetail.fileDate,
+						/* 6 */ thisMod.fileDetail.fileSize,
+						/* 7 */ this.emptySort(thisModRec.search.find_brand),
+						/* 8 */ this.emptySort(thisModRec.search.find_cats)
 					])
 
 					this.mods[CKey][MKey] = thisModRec
@@ -243,6 +248,8 @@ class StateManager {
 			thisCol.sort_version = thisCol.sorter.sort((a, b) => Intl.Collator().compare(a[4], b[4])).map((x) => x[0])
 			thisCol.sort_date    = thisCol.sorter.sort((a, b) => Intl.Collator().compare(b[5], a[5])).map((x) => x[0])
 			thisCol.sort_size    = thisCol.sorter.sort((a, b) => a[6] - b[6]).map((x) => x[0])
+			thisCol.sort_brand   = thisCol.sorter.sort((a, b) => Intl.Collator().compare(a[7], b[7])).map((x) => x[0])
+			thisCol.sort_cat     = thisCol.sorter.sort((a, b) => Intl.Collator().compare(a[8], b[8])).map((x) => x[0])
 		}
 	}
 
@@ -336,7 +343,7 @@ class StateManager {
 	// MARK: translated UI selects
 	async updateI18NDrops() {
 		const finds = ['find_all', 'find_author', 'find_brand', 'find_cats', 'find_title', 'find_name']
-		const sorts = ['sort_name', 'sort_title', 'sort_author', 'sort_date', 'sort_version', 'sort_size']
+		const sorts = ['sort_name', 'sort_title', 'sort_brand', 'sort_author', 'sort_cat', 'sort_date', 'sort_version', 'sort_size']
 
 		const findOptions = finds.map((x) =>
 			window.i18n.get(x).then((r) => DATA.optionFromArray([x, r.entry], this.track.searchType))

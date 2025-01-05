@@ -579,6 +579,8 @@
 	"select_only__title"                    : "Afficher uniquement la sélection",
 	"select_pick"                           : "Sélectionnez",
 	"sort_author"                           : "Trier : Auteur",
+	"sort_brand"                            : "Trier : Marque",
+	"sort_cat"                              : "Tri : Catégorie",
 	"sort_date"                             : "Trier : Date du fichier",
 	"sort_name"                             : "Trier : Nom de fichier",
 	"sort_size"                             : "Tri : Taille",
