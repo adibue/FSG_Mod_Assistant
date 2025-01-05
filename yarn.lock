@@ -495,10 +495,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@eslint/js@npm:9.16.0":
-  version: 9.16.0
-  resolution: "@eslint/js@npm:9.16.0"
-  checksum: ba2d7f7266df827df72cec069df9284ad5e7edb4894a8c58c41db0d489136b22815dc76cd34cf565284979feb4d3a8197b511e08529c03f30c80b5235d25030b
+"@eslint/js@npm:9.17.0":
+  version: 9.17.0
+  resolution: "@eslint/js@npm:9.17.0"
+  checksum: b68a14ff518ffa12e3b85fa9c72b818faeff092285acfbf02da2d0fb12a681b76651638881e98845f2df2ed346ed0d33faeb1d9caac163daf232c223b7efe89c
   languageName: node
   linkType: hard
 
@@ -1990,7 +1990,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"cross-spawn@npm:^7.0.5":
+"cross-spawn@npm:^7.0.6":
   version: 7.0.6
   resolution: "cross-spawn@npm:7.0.6"
   dependencies:
@@ -2320,16 +2320,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"electron@npm:^33.2.1":
-  version: 33.2.1
-  resolution: "electron@npm:33.2.1"
+"electron@npm:^33.3.0":
+  version: 33.3.0
+  resolution: "electron@npm:33.3.0"
   dependencies:
     "@electron/get": ^2.0.0
     "@types/node": ^20.9.0
     extract-zip: ^2.0.1
   bin:
     electron: cli.js
-  checksum: c5b7d5fe56f831da5d14be9d24d0a29fdb392d5b4e593b31200a9c01e6260d87bba1216c4cc17297b2f4838e0893428464b9e2ca71c3eaff499dbff1981c0670
+  checksum: d121a50bc3d5ce186ad98433df9b60c96ec93924dbf7f68777a3c03b40ef39729badf20689ecc4b513e80ecfab0773bdf991fd7686958072f0cb7dcadce3cf8a
   languageName: node
   linkType: hard
 
@@ -2536,16 +2536,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"eslint@npm:^9.16.0":
-  version: 9.16.0
-  resolution: "eslint@npm:9.16.0"
+"eslint@npm:^9.17.0":
+  version: 9.17.0
+  resolution: "eslint@npm:9.17.0"
   dependencies:
     "@eslint-community/eslint-utils": ^4.2.0
     "@eslint-community/regexpp": ^4.12.1
     "@eslint/config-array": ^0.19.0
     "@eslint/core": ^0.9.0
     "@eslint/eslintrc": ^3.2.0
-    "@eslint/js": 9.16.0
+    "@eslint/js": 9.17.0
     "@eslint/plugin-kit": ^0.2.3
     "@humanfs/node": ^0.16.6
     "@humanwhocodes/module-importer": ^1.0.1
@@ -2554,7 +2554,7 @@ __metadata:
     "@types/json-schema": ^7.0.15
     ajv: ^6.12.4
     chalk: ^4.0.0
-    cross-spawn: ^7.0.5
+    cross-spawn: ^7.0.6
     debug: ^4.3.2
     escape-string-regexp: ^4.0.0
     eslint-scope: ^8.2.0
@@ -2581,7 +2581,7 @@ __metadata:
       optional: true
   bin:
     eslint: bin/eslint.js
-  checksum: d7b77caed2e319dba9bdf5fd3275c643332e4c79fcfe62cf19031fc430c27fe691daa718474d29a1050b83348085f8df50e04f260e081e5b1fbee1d2ca9c5c74
+  checksum: 0caae58c53bf4dc9b4893d75e62339e4c40fe5589652a3cb63f30a15bad1f34f8f784ca4fca471bbffedabee516a9f9620ebc33818b55e1b715e8f000865c851
   languageName: node
   linkType: hard
 
@@ -2726,14 +2726,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"fast-xml-parser@npm:^4.5.0":
-  version: 4.5.0
-  resolution: "fast-xml-parser@npm:4.5.0"
+"fast-xml-parser@npm:^4.5.1":
+  version: 4.5.1
+  resolution: "fast-xml-parser@npm:4.5.1"
   dependencies:
     strnum: ^1.0.5
   bin:
     fxparser: src/cli/cli.js
-  checksum: 696dc98da46f0f48eb26dfe1640a53043ea64f2420056374e62abbb5e620f092f8df3c3ff3195505a2eefab2057db3bf0ebaac63557f277934f6cce4e7da027c
+  checksum: aab32d7f08a95b20f9ecdc2d769531a9dc454faf12740873972f8169c04ab9335ac5df1029ebfe829a01ddbb0ec60572cb7769d6be2409e95a9be8fc6a86e92c
   languageName: node
   linkType: hard
 
@@ -2962,17 +2962,17 @@ __metadata:
     deepmerge: ^4.3.1
     discord-rpc: ^4.0.1
     docolatte: ^4.5.1
-    electron: ^33.2.1
+    electron: ^33.3.0
     electron-builder: ~25.0.6
     electron-store: ^8.2.0
     electron-updater: ^6.3.9
-    eslint: ^9.16.0
+    eslint: ^9.17.0
     eslint-plugin-unicorn: ^56.0.1
-    fast-xml-parser: ^4.5.0
+    fast-xml-parser: ^4.5.1
     fs_mod_parser_neon: ^0.1.1
     glob: ^11.0.0
-    globals: ^15.13.0
-    html-validate: ^8.27.0
+    globals: ^15.14.0
+    html-validate: ^8.29.0
     jsdoc: ^4.0.4
     node-stream-zip: ^1.15.0
     unzip-stream: ^0.3.4
@@ -3141,10 +3141,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"globals@npm:^15.13.0":
-  version: 15.13.0
-  resolution: "globals@npm:15.13.0"
-  checksum: 3f98514ce25a21150b246fbd63aeaeb271a93b3340cf7f4f6e9934d3b37dbb4b0fddef9c470183097dcfd2e8757bb86bbae701588f0e376667d8d9d6f665db3b
+"globals@npm:^15.14.0":
+  version: 15.14.0
+  resolution: "globals@npm:15.14.0"
+  checksum: fa993433a01bf4a118904fbafbcff34db487fce83f73da75fb4a8653afc6dcd72905e6208c49bab307ff0980928273d0ecd1cfc67e1a4782dabfbd92c234ab68
   languageName: node
   linkType: hard
 
@@ -3276,9 +3276,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"html-validate@npm:^8.27.0":
-  version: 8.27.0
-  resolution: "html-validate@npm:8.27.0"
+"html-validate@npm:^8.29.0":
+  version: 8.29.0
+  resolution: "html-validate@npm:8.29.0"
   dependencies:
     "@html-validate/stylish": ^4.1.0
     "@sidvind/better-ajv-errors": 3.0.1
@@ -3304,7 +3304,7 @@ __metadata:
       optional: true
   bin:
     html-validate: bin/html-validate.js
-  checksum: 790fd26680789eee830141d3f2af5699346331faddd94c03df3ac22627c0e6c3e589cfb3594bc294a0da9a463e71fc4ca56e9245dcdb0b569031b5e9f5f9b4c0
+  checksum: ba4b348b85673423d5668003f520731119cfa1f2af2ad74063ff53826e114af03f340b86eeb65ad4cdb5265f0fa2c44b0baeb2c4a14e2d4908b4ca842b4012e7
   languageName: node
   linkType: hard
 
