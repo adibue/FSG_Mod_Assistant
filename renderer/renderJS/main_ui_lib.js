@@ -1959,6 +1959,7 @@ class FileLib {
 
 	overlay      = null
 	feedback     = null
+	infoData     = null
 
 	dest_multi  = new Set(['import', 'multiCopy', 'multiMove', 'copyFavs'])
 	dest_none   = new Set(['delete'])
@@ -1999,7 +2000,8 @@ class FileLib {
 
 	constructor() {
 		this.overlay  = new bootstrap.Offcanvas('#fileOpCanvas')
-		this.feedback = new bootstrap.Modal('#fileOpProgress', { backdrop : 'static', keyboard : false })
+		this.infoData = MA.byId('file_op_display')
+		this.feedback = MA.byId('file_op_result')
 		MA.byId('fileOpCanvas').addEventListener('hide.bs.offcanvas', () => {
 			this.stop()
 		})
@@ -2264,6 +2266,8 @@ class FileLib {
 
 		const lookupOp = mods.multiDestination ? `multi${this.flags.operation.slice(0, 1).toUpperCase()}${this.flags.operation.slice(1)}` : this.flags.operation
 
+		this.infoData.clsShow()
+		this.feedback.clsHide()
 		MA.byIdHTML('fileOpCanvas-title', I18N.defer(this.l10n_title[lookupOp], false))
 		MA.byIdHTML('fileOpCanvas-info', I18N.defer(this.l10n_info[lookupOp], false))
 		MA.byIdHTML('fileOpCanvas-button', `${I18N.defer(this.l10n_button[lookupOp], false)} [${this.flags.count}]`)
@@ -2336,7 +2340,8 @@ class FileLib {
 
 		if ( filePayload.length === 0 ) { return }
 
-		this.feedback.show()
+		this.feedback.clsShow()
+		this.infoData.clsHide()
 		MA.byId('fileOpWorking').clsShow()
 		MA.byId('fileOpSuccess').clsHide()
 		MA.byId('fileOpDanger').clsHide()
@@ -2363,7 +2368,6 @@ class FileLib {
 			}
 
 			setTimeout(() => {
-				this.feedback.hide()
 				this.overlay.hide()
 				window.state.select.none()
 				window.main_IPC.folder.reload()
