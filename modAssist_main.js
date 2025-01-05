@@ -694,7 +694,7 @@ ipcMain.on('cache:clean', () => {
 })
 ipcMain.on('settings:prefFile',    (_, version) => { funcLib.prefs.changeFilePath(version, false) })
 ipcMain.on('settings:gamePath',    (_, version) => { funcLib.prefs.changeFilePath(version, true) })
-
+ipcMain.handle('settings:clear',   (_, version) => funcLib.prefs.clearVersion(version))
 
 // MARK: setup wizard
 ipcMain.handle('wizard:update', () => ({

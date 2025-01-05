@@ -302,6 +302,7 @@ contextBridge.exposeInMainWorld(
 
 contextBridge.exposeInMainWorld(
 	'settings', {
+		clearVer    : (ver)      => ipcRenderer.invoke('settings:clear', ver),
 		dev         : ()         => ipcRenderer.invoke('settings:dev'),
 		get         : (key)      => ipcRenderer.invoke('settings:get', key),
 		set         : (k, v)     => ipcRenderer.invoke('settings:set', k, v),

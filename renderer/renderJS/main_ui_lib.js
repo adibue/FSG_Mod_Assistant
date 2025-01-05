@@ -1590,6 +1590,14 @@ class PrefLib {
 			'<div class="form-check form-switch custom-switch col-2">',
 			`<input id="pref--${ver}-dev-mode" class="form-check-input" type="checkbox" role="switch">`,
 			'</div></div></div></div>',
+
+			'<div class="col-12 mt-3 inset-block"><div>',
+			'<i18n-text class="inset-block-header" data-key="user_pref_title_clear"></i18n-text>',
+			'<div class="row">',
+			'<i18n-text class="inset-block-blurb-option col-12 align-self-center" data-key="user_pref_blurb_clear"></i18n-text>',
+			'<div class="col-12 mt-2">',
+			`<i18n-text data-key="user_pref_button_clear" id="pref--${ver}-clear" class="btn btn-sm btn-danger w-100" type="button"></i18n-text>`,
+			'</div></div></div></div>',
 			'</div></div>',
 
 			'</div>',
@@ -1598,11 +1606,13 @@ class PrefLib {
 
 		const button_game_path = node.querySelector(`#pref--${ver}-game-path-btn`)
 		const button_set_path  = node.querySelector(`#pref--${ver}-game-settings-btn`)
+		const button_clear     = node.querySelector(`#pref--${ver}-clear`)
 		const value_game_path  = node.querySelector(`#pref--${ver}-game-path`)
 		const value_set_path   = node.querySelector(`#pref--${ver}-game-settings`)
 		const value_args       = node.querySelector(`#pref--${ver}-game-args`)
 		const switch_dev_mode  = node.querySelector(`#pref--${ver}-dev-mode`)
 		const switch_enabled   = node.querySelector(`#pref--${ver}-game-enabled`)
+
 
 		const arg_cheats = node.querySelector(`#pref--${ver}-game-args-cheat`)
 		const arg_video  = node.querySelector(`#pref--${ver}-game-args-video`)
@@ -1684,6 +1694,12 @@ class PrefLib {
 
 		button_set_path.addEventListener('click', () => {
 			window.settings.setPrefFile(ver)
+		})
+
+		button_clear.addEventListener('click', () => {
+			window.settings.clearVer(ver).then(() => {
+				updater()
+			})
 		})
 
 		value_args.addEventListener('change', () => {
