@@ -2236,9 +2236,19 @@ class FileLib {
 			}
 		}
 
+		const thisModFileVersion = this.flags.operation !== 'import' ?
+			mod.gameVersion :
+			/FS(\d\d)_/.exec(mod)?.[1] || null
+
 		const node = this.flags.operation !== 'import' ?
 			this.showMod_known(mod) :
 			this.showMod_new(mod, this.lastPayload.isZipImport ? this.lastPayload.zipFiles.map((x) => `${x.name} (${x.size})`) : null)
+
+		if ( thisModFileVersion !== null && parseInt(thisModFileVersion) !== window.state.flag.currentVersion ) {
+			node.querySelector('.version-diff').clsShow()
+		} else {
+			node.querySelector('.version-diff').clsHide()
+		}
 
 		if ( isMulti || isDelete ) {
 			node.querySelector('.no-dest').clsHide()
