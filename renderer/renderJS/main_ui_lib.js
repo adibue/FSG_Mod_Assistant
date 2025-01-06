@@ -315,9 +315,9 @@ class StateManager {
 	updateUI() {
 		const todayIS = new Date()
 		if ( this.flag.debugMode ) {
-			MA.byId('drag_target', 'fsg-back-3')
+			MA.byId('background_target', 'fsg-back-3')
 		} else if ( todayIS.getMonth() === 3 && todayIS.getDate() === 1 ) {
-			MA.byId('drag_target', 'fsg-back-2')
+			MA.byId('background_target', 'fsg-back-2')
 		}
 
 		MA.queryF('[data-key="game_icon_lg"]').setAttribute('refresh', 'true')
@@ -1255,7 +1255,7 @@ class PrefLib {
 			window.state.dragDrop.flags.preventRun = true
 		})
 		MA.byId('prefs--close-btn').addEventListener('click', () => {
-			this.overlay.hide()
+			this.overlay.hide() // Prefs Canvas
 		})
 		window.settings.receive('settings:invalidate', () => { this.forceUpdate() })
 		this.init()
@@ -1768,9 +1768,9 @@ class DragDropLib {
 
 		const dragTarget = MA.byId('drag_target')
 		dragTarget.addEventListener('dragenter', (e) => { this.dragEnter(e) } )
-		dragTarget.addEventListener('dragleave', (e) => { this.dragLeave(e) } )
-		dragTarget.addEventListener('dragover',  (e) => { this.dragOver(e) } )
-		dragTarget.addEventListener('drop',      (e) => { this.dragDrop(e) } )
+		// dragTarget.addEventListener('dragleave', (e) => { this.dragLeave(e) } )
+		// dragTarget.addEventListener('dragover',  (e) => { this.dragOver(e) } )
+		// dragTarget.addEventListener('drop',      (e) => { this.dragDrop(e) } )
 
 		this.feedback.backdrop         = MA.byId('drag_back')
 		this.feedback.file             = MA.byId('drag_add_file')
@@ -1779,7 +1779,11 @@ class DragDropLib {
 		this.feedback.text_normal_file = MA.byId('csv-no-text')
 		this.feedback.icon_csv_file    = MA.byId('csv-yes')
 		this.feedback.icon_normal_file = MA.byId('csv-no')
-		
+
+		// this.feedback.backdrop.addEventListener('dragenter', (e) => { this.dragEnter(e) } )
+		this.feedback.backdrop.addEventListener('dragleave', (e) => { this.dragLeave(e) } )
+		this.feedback.backdrop.addEventListener('dragover',  (e) => { this.dragOver(e) } )
+		this.feedback.backdrop.addEventListener('drop',      (e) => { this.dragDrop(e) } )
 	}
 
 	resetArea(area) {
@@ -1890,7 +1894,7 @@ class ModalOverlay {
 
 	constructor(id) {
 		this.overlay = new bootstrap.Modal(id, {backdrop : 'static'})
-		this.overlay.hide()
+		this.overlay.hide() // Modal Overlay Class
 	}
 
 	show() {
@@ -1898,7 +1902,7 @@ class ModalOverlay {
 	}
 
 	hide() {
-		this.overlay.hide()
+		this.overlay.hide() // Modal Overlay Class
 	}
 }
 
@@ -1910,11 +1914,11 @@ class LoaderLib {
 	startTime = Date.now()
 
 	constructor() {
-		this.overlay = new bootstrap.Modal('#loadOverlay', { backdrop : 'static', keyboard : false })
+		this.overlay = MA.byId('loadOverlay')
 	}
 
-	hide() { this.overlay?.hide() }
-	show() { this.overlay?.show() }
+	hide() { this.overlay?.clsHide() }
+	show() { this.overlay?.clsShow() }
 
 	hideCount() {
 		MA.byId('loadOverlay_statusCount').clsHide()
@@ -1980,7 +1984,8 @@ class FileLib {
 		operation  : null,
 	}
 
-	overlay      = null
+	overlay      = {}
+	overlayDiv   = null
 	feedback     = null
 	infoData     = null
 
@@ -2022,18 +2027,22 @@ class FileLib {
 	selectedMods = {}
 
 	constructor() {
-		this.overlay  = new bootstrap.Offcanvas('#fileOpCanvas')
+		this.overlayDiv = MA.byId('fileOpCanvas')
+		this.overlay.show = () => {
+			this.overlayDiv.clsShow()
+			this.overlayDiv.querySelector('.fileOpCanvas-body').scrollTop = 0
+		}
+		this.overlay.hide = () => {
+			this.overlayDiv.clsHide()
+			this.stop()
+		}
+
 		this.infoData = MA.byId('file_op_display')
 		this.feedback = MA.byId('file_op_result')
-		MA.byId('fileOpCanvas').addEventListener('hide.bs.offcanvas', () => {
-			this.stop()
-		})
-		MA.byId('fileOpCanvas').addEventListener('show.bs.offcanvas', () => {
-			MA.byId('fileOpCanvas').querySelector('.offcanvas-body').scrollTop = 0
-		})
+
 		MA.byId('fileOpCanvas-button').addEventListener('click', () => { this.process() })
 		MA.byId('fileOpCanvas-button-close').addEventListener('click', () => {
-			this.overlay.hide()
+			this.overlay.hide() // File Canvas
 		})
 
 		window.main_IPC.receive('files:operation', (mode, mods) => {
@@ -2391,7 +2400,7 @@ class FileLib {
 			}
 
 			setTimeout(() => {
-				this.overlay.hide()
+				this.overlay.hide() // File Canvas
 				window.state.select.none()
 				window.main_IPC.folder.reload()
 			}, didFail ? 5000 : 1500)
