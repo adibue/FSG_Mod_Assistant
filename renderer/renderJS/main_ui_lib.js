@@ -1768,6 +1768,11 @@ class DragDropLib {
 
 		const dragTarget = MA.byId('drag_target')
 		dragTarget.addEventListener('dragenter', (e) => { this.dragEnter(e) } )
+		dragTarget.addEventListener('dragleave', (e) => { this.dragLeave(e) } )
+		dragTarget.addEventListener('dragover',  (e) => { this.dragOver(e) } )
+		dragTarget.addEventListener('dragend',   (e) => { this.dragEnd(e) } )
+		dragTarget.addEventListener('drop',      (e) => { this.dragDrop(e) } )
+		dragTarget.addEventListener('dragend',   (e) => { this.dragEnd(e) } )
 
 		this.feedback.backdrop         = MA.byId('drag_back')
 		this.feedback.file             = MA.byId('drag_add_file')
@@ -1777,8 +1782,10 @@ class DragDropLib {
 		this.feedback.icon_csv_file    = MA.byId('csv-yes')
 		this.feedback.icon_normal_file = MA.byId('csv-no')
 
+		this.feedback.backdrop.addEventListener('dragenter', (e) => { this.dragEnter(e) } )
 		this.feedback.backdrop.addEventListener('dragleave', (e) => { this.dragLeave(e) } )
 		this.feedback.backdrop.addEventListener('dragover',  (e) => { this.dragOver(e) } )
+		this.feedback.backdrop.addEventListener('dragend',   (e) => { this.dragEnd(e) } )
 		this.feedback.backdrop.addEventListener('drop',      (e) => { this.dragDrop(e) } )
 	}
 
@@ -1793,6 +1800,11 @@ class DragDropLib {
 		this.feedback.icon_normal_file.clsHide(isCSV)
 	}
 
+	dragEnd (e) {
+		e.preventDefault()
+		e.stopPropagation()
+	}
+
 	dragDrop (e) {
 		e.preventDefault()
 		e.stopPropagation()
@@ -1800,12 +1812,12 @@ class DragDropLib {
 		if ( window.state.files.flags.isRunning ) { return }
 		if ( this.flags.preventRun ) { return }
 		
+		const types = e.dataTransfer.types
+
+		if (types.length !== 1 || !types.includes('Files')) { return }
+
 		this.flags.isRunning = false
-	
-		this.feedback.backdrop.clsHide()
-		this.resetArea(this.feedback.file)
-		this.resetArea(this.feedback.folder)
-	
+
 		const dt    = e.dataTransfer
 		const files = dt.files
 
@@ -1818,7 +1830,10 @@ class DragDropLib {
 				}
 			})
 		}
-	
+
+		this.feedback.backdrop.clsHide()
+		this.resetArea(this.feedback.file)
+		this.resetArea(this.feedback.folder)
 		this.flags.isFolder = false
 	}
 
@@ -1829,7 +1844,12 @@ class DragDropLib {
 		if ( window.state.files.flags.isRunning ) { return }
 		if ( this.flags.preventRun ) { return }
 
+		const types = e.dataTransfer.types
+
+		if (types.length !== 1 || !types.includes('Files')) { return }
+
 		if ( !this.flags.isRunning ) {
+			
 			this.feedback.backdrop.clsShow()
 		
 			const isCSV = e.dataTransfer.items[0].type === 'text/csv'

@@ -427,7 +427,7 @@ ipcMain.on('main:dragOut', (event, modID) => {
 
 	event.sender.startDrag({
 		file : path.join(thisFolder, path.basename(thisMod.fileDetail.fullPath)),
-		icon : serveIPC.windowLib.contextIcons.fileCopy,
+		icon : serveIPC.windowLib.contextIcons.dragDrop,
 	})
 })
 ipcMain.on('context:mod', async (event, modID, modIDs) => {
