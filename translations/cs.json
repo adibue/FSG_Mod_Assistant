@@ -297,6 +297,7 @@
 	"make_zip"                              : "Export ZIP File",
 	"make_zip__title"                       : "Make a ZIP file of selected mods for sharing or distribution",
 	"malicious_code"                        : "This mod may contain malicious LUA scripting - you should delete it now!",
+	"malicious_file"                        : "该修改器包含 EXE、BAT 或 PS1 文件，而养殖模拟器不使用这些文件。  这可能是 MOD 制作者的错误，也可能是危险的。建议删除，但至少不要贸然在系统中运行这些文件。",
 	"malware_button_delete"                 : "I do not trust it, move it to recycle bin right now",
 	"malware_button_false"                  : "I am sure it is fine, keep it, and never ask me about this mod again",
 	"malware_button_keep"                   : "我想进行调查，现在保留它",

@@ -297,6 +297,7 @@
 	"make_zip"                              : "ZIP-Datei exportieren",
 	"make_zip__title"                       : "Erstelle eine ZIP-Datei der ausgewählten Mods zum Teilen oder Verteilen",
 	"malicious_code"                        : "Diese Modifikation kann böswillige LUA-Skripte enthalten - du solltest sie jetzt löschen!",
+	"malicious_file"                        : "Dieser Mod enthält eine EXE-, BAT- oder PS1-Datei, die vom Landwirtschaftssimulator nicht verwendet wird.  Es könnte ein Fehler des Mod-Herstellers sein, oder es könnte gefährlich sein. Löschung wird empfohlen, aber zumindest nicht laufen diese Dateien auf Ihrem System ohne sorgfältige Prüfung.",
 	"malware_button_delete"                 : "Ich vertraue ihr nicht, lösche sie jetzt",
 	"malware_button_false"                  : "Ich bin sicher, es ist in Ordnung. Behalte es und frage mich nie wieder nach diesem Mod.",
 	"malware_button_keep"                   : "Ich möchte nachforschen, vorerst behalten",

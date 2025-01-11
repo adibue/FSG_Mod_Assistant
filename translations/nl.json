@@ -297,6 +297,7 @@
 	"make_zip"                              : "ZIP-bestand exporteren",
 	"make_zip__title"                       : "Maak een ZIP-bestand van geselecteerde mods voor het delen of verspreiden",
 	"malicious_code"                        : "Deze mod kan schadelijke LUA-scripting bevatten - je moet het nu verwijderen!",
+	"malicious_file"                        : "Deze mod bevat een EXE, BAT, of PS1 bestand - geen van deze worden gebruikt door de farming simulator.  Het kan een fout zijn van de maker van de mod, of het kan gevaarlijk zijn. Verwijdering wordt aanbevolen, maar laat deze bestanden in ieder geval niet op je systeem draaien zonder er goed over na te denken.",
 	"malware_button_delete"                 : "Ik vertrouw het niet, verwijder het nu meteen",
 	"malware_button_false"                  : "Ik weet zeker dat het goed is, hou het en vraag me nooit meer naar deze mod.",
 	"malware_button_keep"                   : "Ik wil het onderzoeken, voorlopig houden",

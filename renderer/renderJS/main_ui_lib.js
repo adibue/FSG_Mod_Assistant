@@ -2428,7 +2428,9 @@ class FileLib {
 			setTimeout(() => {
 				this.overlay.hide() // File Canvas
 				window.state.select.none()
-				window.main_IPC.folder.reload()
+				setTimeout(() => {
+					window.main_IPC.folder.reload()
+				}, 250)
 			}, didFail ? 5000 : 1500)
 		})
 	}

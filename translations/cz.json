@@ -297,6 +297,7 @@
 	"make_zip"                              : "Exportovat soubor ZIP",
 	"make_zip__title"                       : "Vytvořit soubor ZIP pro vybrané mody pro sdílení nebo distribuci",
 	"malicious_code"                        : "Tento mod může obsahovat škodlivý LUA skript - měli byste jej ihned smazat!",
+	"malicious_file"                        : "Tento mod obsahuje soubor EXE, BAT nebo PS1 - žádný z nich není používán simulátorem farmaření.  Může to být chyba tvůrců módu nebo to může být nebezpečné. Doporučujeme smazat, ale alespoň tyto soubory bez důkladného zvážení nespouštějte ve svém systému.",
 	"malware_button_delete"                 : "Nevěřím tomu, hned to vymažte.",
 	"malware_button_false"                  : "Jsem si jistý, že je to v pořádku, nechte si to a už se mě nikdy neptejte na tuto úpravu.",
 	"malware_button_keep"                   : "Chtěl bych to prozkoumat, zatím si to nechte.",

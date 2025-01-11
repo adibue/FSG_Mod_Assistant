@@ -297,6 +297,7 @@
 	"make_zip"                              : "Exporter un fichier ZIP",
 	"make_zip__title"                       : "Créer un fichier ZIP des mods sélectionnés pour le partage ou la distribution",
 	"malicious_code"                        : "Ce mod peut contenir des scripts LUA malveillants - vous devriez le supprimer maintenant !",
+	"malicious_file"                        : "Ce mod contient un fichier EXE, BAT, ou PS1 - aucun de ces fichiers n'est utilisé par le simulateur d'agriculture.  Il peut s'agir d'une erreur du fabricant du mod, ou d'un fichier dangereux. La suppression est recommandée, mais au moins n'exécutez pas ces fichiers sur votre système sans y avoir mûrement réfléchi.",
 	"malware_button_delete"                 : "Je ne lui fais pas confiance, supprimez-le immédiatement.",
 	"malware_button_false"                  : "Je suis sûr qu'il est très bien, gardez-le, et ne me posez plus jamais de questions sur ce mod.",
 	"malware_button_keep"                   : "J'aimerais enquêter, mais je le garde pour l'instant.",

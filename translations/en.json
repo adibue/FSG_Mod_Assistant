@@ -297,6 +297,7 @@
 	"make_zip"                              : "Export ZIP File",
 	"make_zip__title"                       : "Make a ZIP file of selected mods for sharing or distribution",
 	"malicious_code"                        : "This mod may contain malicious LUA scripting - you should delete it now!",
+	"malicious_file"                        : "This mod contains an EXE, BAT, or PS1 file - none of which are used by farming simulator.  It may be the mod makers error, or it could be dangerous. Deletion is recommended, but at least do not run those files on your system without careful consideration.",
 	"malware_button_delete"                 : "I do not trust it, move it to recycle bin right now",
 	"malware_button_false"                  : "I am sure it is fine, keep it, and never ask me about this mod again",
 	"malware_button_keep"                   : "I would like to investigate, keep it for now",

@@ -166,7 +166,7 @@ class windowState {
 					...await this.#do_subStep_issues(),
 					...await this.#do_subStep_binds(bindingIssue),
 				]).then((value) => {
-					const theseIssues = value.map((item) => `<tr class="py-2"><td class="px-2">${DATA.checkX(0, false)}</td><td>${item.value}}</td></tr>`)
+					const theseIssues = value.map((item) => `<tr class="py-2"><td class="px-2">${DATA.checkX(0, false)}</td><td>${item.value}</td></tr>`)
 					MA.byIdHTML('problems', `<table class="table table-borderless mb-0">${theseIssues.join('')}</table>`)
 				})
 			}

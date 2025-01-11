@@ -297,6 +297,7 @@
 	"make_zip"                              : "Eksportēt ZIP failu",
 	"make_zip__title"                       : "Izvēlēto modu ZIP failu koplietošanai vai izplatīšanai",
 	"malicious_code"                        : "Šis mod var saturēt ļaunprātīgu LUA skriptu - jums vajadzētu to dzēst tagad!",
+	"malicious_file"                        : "Šajā modifikācijā ir EXE, BAT vai PS1 fails - neviens no tiem netiek izmantots lauksaimniecības simulatorā.  Iespējams, ka tā ir moda veidotāja kļūda, vai arī tas var būt bīstams. Ieteicams izdzēst, bet vismaz bez rūpīgas pārdomu veikšanas šos failus savā sistēmā neievietojiet.",
 	"malware_button_delete"                 : "Es tam neuzticos, izdzēst to tieši tagad",
 	"malware_button_false"                  : "Es esmu pārliecināts, ka tas ir labi, paturiet to, un nekad vairs neprasiet man par šo modi",
 	"malware_button_keep"                   : "Es gribētu izpētīt, pagaidām saglabāt to",

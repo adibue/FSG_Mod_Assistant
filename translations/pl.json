@@ -297,6 +297,7 @@
 	"make_zip"                              : "Eksportuj plik ZIP",
 	"make_zip__title"                       : "Zrób plik ZIP z wybranymi modami do udostępnienia lub dystrybucji",
 	"malicious_code"                        : "Ten mod może zawierać złośliwe skrypty LUA - powinieneś go usunąć!",
+	"malicious_file"                        : "Ten mod zawiera plik EXE, BAT lub PS1 - żaden z nich nie jest używany przez symulator rolnictwa.  Może to być błąd twórców moda lub może być niebezpieczne. Zaleca się usunięcie, ale przynajmniej nie uruchamiaj tych plików w systemie bez dokładnego rozważenia.",
 	"malware_button_delete"                 : "Nie ufam temu, usuń to natychmiast",
 	"malware_button_false"                  : "Jestem pewien, że jest w porządku, zatrzymaj go i nigdy więcej nie pytaj mnie o ten mod",
 	"malware_button_keep"                   : "Chciałbym to zbadać, na razie zachowaj to",
