@@ -956,6 +956,9 @@ modQueueRunner.on('process-mods-done', () => {
 
 			const thisMod = serveIPC.modCollect.modColUUIDToRecord(thisBadMod)
 
+			// not sure why, but sometimes this data is stale.
+			if ( thisMod === null ) { continue }
+
 			// Always ignore, user has whitelisted file
 			if ( currentSavedIgnoreList.has(thisMod.fileDetail.shortName) ) { continue }
 			// Always ignore, file added to master whitelist
