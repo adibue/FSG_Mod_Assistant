@@ -714,10 +714,10 @@ class StateManager {
 		].filter((x) => x !== null))
 	
 		mod.node.id = thisMod.colUUID
-		mod.node.setAttribute('draggable', true)
+		// mod.node.setAttribute('draggable', true)
 	
 		mod.node.addEventListener('contextmenu', () => { this.modContext(thisMod.colUUID) })
-		mod.node.addEventListener('dragstart',   (e) => { this.modDrag(e, thisMod.colUUID) })
+		// mod.node.addEventListener('dragstart',   (e) => { this.modDrag(e, thisMod.colUUID) })
 		mod.node.addEventListener('click',       (e) => { this.modClick(e, thisMod.colUUID) })
 
 		if ( ! thisMod.badgeArray.includes('notmod') && ! thisMod.badgeArray.includes('savegame') ) {
