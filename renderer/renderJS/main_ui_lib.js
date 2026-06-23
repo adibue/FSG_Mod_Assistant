@@ -1413,55 +1413,6 @@ class PrefLib {
 				window?.i18n?.receive('i18n:refresh', lang_update)
 				break
 			}
-			case 'use_discord' : {
-				node.innerHTML = [
-					'<i18n-text class="inset-block-header" data-key="user_pref_title_use_discord"></i18n-text>',
-					'<div class="row gy-2">',
-					'<i18n-text class="inset-block-blurb-option col-10" data-key="user_pref_blurb_use_discord"></i18n-text>',
-					'<div class="form-check form-switch custom-switch col-2">',
-					'<input id="pref--use-discord-check" class="form-check-input" type="checkbox" role="switch">',
-					'</div>',
-					'<i18n-text class="col-6" data-key="user_pref_setting_discord_2"></i18n-text>',
-					'<div class="col-6 px-0"><input type="text" class="form-control" id="pref--use-discord-c2" style="font-size: 70%"></div>',
-					'<i18n-text class="col-6" data-key="user_pref_setting_discord_1"></i18n-text>',
-					'<div class="col-6 px-0"><input type="text" class="form-control" id="pref--use-discord-c1" style="font-size: 70%"></div>',
-					'</div>',
-				].join('')
-				const discord_check = node.querySelector('#pref--use-discord-check')
-				const discord_text_1 = node.querySelector('#pref--use-discord-c1')
-				const discord_text_2 = node.querySelector('#pref--use-discord-c2')
-
-				discord_check.addEventListener('change', () => {
-					window.settings.set('use_discord', discord_check.checked).then((value) => {
-						discord_check.checked = value
-					})
-				})
-
-				discord_text_1.addEventListener('change', () => {
-					window.settings.set('use_discord_c1', discord_text_1.value).then((value) => {
-						discord_text_1.value = value
-					})
-				})
-
-				discord_text_2.addEventListener('change', () => {
-					window.settings.set('use_discord_c2', discord_text_2.value).then((value) => {
-						discord_text_2.value = value
-					})
-				})
-
-				this.update.push(() => {
-					window.settings.get('use_discord').then((value) => {
-						discord_check.checked = value
-					})
-					window.settings.get('use_discord_c1').then((value) => {
-						discord_text_1.value = value
-					})
-					window.settings.get('use_discord_c2').then((value) => {
-						discord_text_2.value = value
-					})
-				})
-				break
-			}
 			case 'cache_manage' :
 				node.innerHTML = [
 					'<i18n-text class="inset-block-header" data-key="user_pref_title_clean_cache"></i18n-text>',

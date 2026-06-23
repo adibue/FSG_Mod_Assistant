@@ -43,7 +43,6 @@
     "ajv": "^8.17.1",
     "ajv-formats": "^2.1.1",
     "archiver": "^7.0.1",
-    "discord-rpc": "^4.0.1",
     "electron-store": "^8.2.0",
     "electron-updater": "^6.3.9",
     "fast-xml-parser": "^4.5.0",
