@@ -204,6 +204,7 @@ class windowState {
 		}
 
 		const tempTitle = this.#doL10N(this.mod.l10n.title)
+		const sourceURL = await window.settings.site(this.mod.fileDetail.shortName, false)
 
 		const idMap = {
 			description    : this.#doL10N(this.mod.l10n.description),
@@ -219,9 +220,7 @@ class windowState {
 			mod_location   : this.mod.fileDetail.fullPath,
 			store_items    : DATA.checkX(this.mod.modDesc.storeItems),
 			title          : (( tempTitle !== '--' ) ? tempTitle : this.mod.fileDetail.shortName),
-			update_source  : ( this.mod.modHub.id !== null ) ?
-				`<a href="https://www.farming-simulator.com/mod.php?mod_id=${this.mod.modHub.id}" target="_BLANK">ModHub</a>` :
-				`<em>${I18N.defer('update_source_not_configured', false )}</em>`,
+			update_source  : this.#updateSourceHTML(sourceURL),
 			version        : DATA.escapeSpecial(this.mod.modDesc.version),
 		}
 		for ( const [id, content] of Object.entries(idMap)) {
@@ -230,11 +229,74 @@ class windowState {
 
 		for ( const element of MA.query('#description a') ) { element.target = '_BLANK' }
 
+		MA.byIdValue('update_source_input', sourceURL)
+		MA.byIdEventIfExists('update_source_save', () => { this.#updateSourceSave() })
+		MA.byIdEventIfExists('update_source_clear', () => { this.#updateSourceClear() })
+
 		MA.byIdHTMLorHide(
 			'icon_div',
 			`<img class="img-fluid" src="${this.mod.modDesc.iconImage}" />`,
 			this.mod.modDesc.iconImage
 		)
+	}
+
+	#updateSourceHTML(sourceURL) {
+		if ( sourceURL !== '' ) {
+			const safeURL = DATA.escapeSpecial(sourceURL)
+			const label   = this.#isGitHubURL(sourceURL) ? 'GitHub' : I18N.defer('update_source_custom', false)
+			return `<a href="${safeURL}" target="_BLANK">${label}</a>`
+		}
+
+		if ( this.mod.modHub.id !== null ) {
+			return `<a href="https://www.farming-simulator.com/mod.php?mod_id=${this.mod.modHub.id}" target="_BLANK">ModHub</a>`
+		}
+
+		return `<em>${I18N.defer('update_source_not_configured', false )}</em>`
+	}
+
+	#isGitHubURL(sourceURL) {
+		try {
+			return new URL(sourceURL).hostname.toLowerCase() === 'github.com'
+		} catch {
+			return false
+		}
+	}
+
+	#normalizedGitHubURL(sourceURL) {
+		try {
+			const url = new URL(sourceURL)
+			if ( url.protocol !== 'https:' ) { return null }
+			if ( url.hostname.toLowerCase() !== 'github.com' ) { return null }
+			const parts = url.pathname.split('/').filter((item) => item !== '')
+			if ( parts.length < 2 ) { return null }
+			url.hash = ''
+			return url.toString()
+		} catch {
+			return null
+		}
+	}
+
+	#updateSourceSave() {
+		const sourceURL = this.#normalizedGitHubURL(MA.byIdValue('update_source_input').trim())
+
+		if ( sourceURL === null ) {
+			MA.byId('update_source_input').classList.add('is-invalid')
+			return
+		}
+
+		MA.byId('update_source_input').classList.remove('is-invalid')
+		window.settings.site(this.mod.fileDetail.shortName, sourceURL).then((value) => {
+			MA.byIdValue('update_source_input', value)
+			MA.byIdHTML('update_source', this.#updateSourceHTML(value))
+		})
+	}
+
+	#updateSourceClear() {
+		MA.byId('update_source_input').classList.remove('is-invalid')
+		window.settings.site(this.mod.fileDetail.shortName, '').then((value) => {
+			MA.byIdValue('update_source_input', value)
+			MA.byIdHTML('update_source', this.#updateSourceHTML(value))
+		})
 	}
 
 	// MARK: SUB binds
