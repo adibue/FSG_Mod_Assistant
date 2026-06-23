@@ -1,8 +1,6 @@
-# FS Mod Assistant Community
+# FSG Mod Assistant
 
-[![License: ISC](https://img.shields.io/github/license/Blacknight78/FSG_Mod_Assistant?color=%231182c3)](https://opensource.org/licenses/ISC) ![GitHub top language](https://img.shields.io/github/languages/top/Blacknight78/FSG_Mod_Assistant) [![GitHub release](https://img.shields.io/github/v/release/Blacknight78/FSG_Mod_Assistant)](https://github.com/Blacknight78/FSG_Mod_Assistant/releases/latest) [![Node.js CI](https://img.shields.io/github/actions/workflow/status/Blacknight78/FSG_Mod_Assistant/test.yml?logo=github&label=tests)](https://github.com/Blacknight78/FSG_Mod_Assistant/actions/workflows/test.yml) [![GitHub issues](https://img.shields.io/github/issues/Blacknight78/FSG_Mod_Assistant)](https://github.com/Blacknight78/FSG_Mod_Assistant/issues)
-
-This is a community-maintained continuation of [FSG Mod Assistant](https://github.com/FSGModding/FSG_Mod_Assistant), originally created by FSG Modding. It is not an official FSG Modding or GIANTS Software project.
+[![License: ISC](https://img.shields.io/github/license/FSGModding/FSG_Mod_Assistant?color=%231182c3)](https://opensource.org/licenses/ISC) ![GitHub top language](https://img.shields.io/github/languages/top/FSGModding/FSG_Mod_Assistant) [![GitHub release (latest by date)](https://img.shields.io/github/v/release/FSGModding/FSG_Mod_Assistant)](https://github.com/FSGModding/FSG_Mod_Assistant/releases/latest) ![GitHub Release Date](https://img.shields.io/github/release-date/FSGModding/FSG_Mod_Assistant?color=%20fedcba) [![Crowdin](https://badges.crowdin.net/fsg-mod-assistant/localized.svg)](https://crowdin.com/project/fsg-mod-assistant) [![Node.js CI](https://img.shields.io/github/actions/workflow/status/FSGModding/FSG_Mod_Assistant/test.yml?logo=github&label=tests)](https://github.com/FSGModding/FSG_Mod_Assistant/actions/workflows/test.yml) [![GitHub issues](https://img.shields.io/github/issues/FSGModding/FSG_Mod_Assistant)](https://github.com/FSGModding/FSG_Mod_Assistant/issues)
 
 ___This is a mod folder switcher with extra tools___
 
@@ -10,9 +8,9 @@ ___This is a mod folder switcher with extra tools___
 - Check a collection against a save game to see what is used and what is not
 - Resolve version differences of mods between collections
 
-__NOTE:__ This application supports Windows 10 and 11. The original project's last Windows 7/8-compatible version remains available as [v2.1.4](https://github.com/FSGModding/FSG_Mod_Assistant/releases/tag/v2.1.4).
+__NOTE:__ This will only run under Windows 10 or 11 - If you are still using Windows 7/8/8.1, you really should fix that, but in the meantime, you can run the last version that was supported, [v2.1.4](https://github.com/FSGModding/FSG_Mod_Assistant/releases/tag/v2.1.4)
 
-[Documentation](https://github.com/Blacknight78/FSG_Mod_Assistant/tree/main/docs)
+[Full Documentation Site](https://fsgmodding.github.io/FSG_Mod_Assistant/)
 
 ## What this does
 
@@ -41,13 +39,13 @@ At it's core functionality, this is a file manager, and it has the ability to ed
 
 ## Usage
 
-Download installers and portable builds from the community [Releases](https://github.com/Blacknight78/FSG_Mod_Assistant/releases) page.
+Download the installer for your platform from the [Releases](https://github.com//FSGModding/FSG_Mod_Assistant/releases) page - the program will install with 1-click, and auto-run when it's ready.
 
 ### Download options
 
 Builds are available for the following:
 
-[Latest Release](https://github.com/Blacknight78/FSG_Mod_Assistant/releases/latest)
+[Latest Release](https://github.com/FSGModding/FSG_Mod_Assistant/releases/latest)
 
 - __win x64 Installer__ : with auto updating
 - __win x64 Portable__ : no need to install, but no auto updating

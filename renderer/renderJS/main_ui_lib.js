@@ -16,6 +16,7 @@ class StateManager {
 
 	flag = {
 		activeCollect  : null,
+		currentLocale  : 'en',
 		currentVersion : 22,
 		debugMode      : false,
 		folderDirty    : false,
@@ -71,6 +72,13 @@ class StateManager {
 		this.modal.modInfo  = new ModalOverlay('#open_mod_info_modal')
 
 		window.main_IPC.receive('status:all', () => this.updateState() )
+		window.main_IPC.receive('files:deleteTrigger', () => {
+			if ( this.track.selected.size !== 0 ) {
+				this.startFile('delete')
+			} else if ( this.track.openCollection !== null ) {
+				window.main_IPC.folder.remove(this.track.openCollection)
+			}
+		})
 	}
 
 	#updateTracking(data) {
@@ -89,6 +97,7 @@ class StateManager {
 
 		this.track.lastPayload   = data
 		this.flag.activeCollect  = data.opts.activeCollection
+		this.flag.currentLocale  = data.opts.currentLocale
 		this.flag.currentVersion = data.appSettings.game_version
 		this.flag.debugMode      = data.opts.isDev
 		this.flag.folderDirty    = data.opts.foldersDirty
@@ -112,8 +121,20 @@ class StateManager {
 		this.mapCollectionDropdown = new Map()
 		this.mapCollectionDropdown.set(0, `--${data.opts.l10n.disable}--`)
 	}
+	doL10N(item, lowerCase = false) {
+		let returnText = item?.[this.track.currentLocale]
+		returnText ??= item?.en
+		returnText ??= item?.de
+		returnText ??= '--'
+		return lowerCase ? DATA.escapeSpecial(returnText).toLowerCase() : DATA.escapeSpecial(returnText)
+	}
+
+	emptySort(text) {
+		return text || 'ZZZZ'
+	}
 	// MARK: process data
 	async updateFromData(data) {
+		window.data = data
 		this.#updateTracking(data)
 	
 		for ( const [CIndex, CKey] of Object.entries([...data.set_Collections]) ) {
@@ -148,19 +169,22 @@ class StateManager {
 					for ( const tag of thisModRec.filters ) { this.searchTagList.add(tag) }
 
 					thisCol.sorter.push([
-						MKey,
-						thisModRec.search.find_name,
-						thisModRec.search.find_author,
-						thisModRec.search.find_title,
-						thisModRec.search.find_version,
-						thisMod.fileDetail.fileDate
+						/* 0 */ MKey,
+						/* 1 */ thisModRec.search.find_name,
+						/* 2 */ thisModRec.search.find_author,
+						/* 3 */ thisModRec.search.find_title,
+						/* 4 */ thisModRec.search.find_version,
+						/* 5 */ thisMod.fileDetail.fileDate,
+						/* 6 */ thisMod.fileDetail.fileSize,
+						/* 7 */ this.emptySort(thisModRec.search.find_brand),
+						/* 8 */ this.emptySort(thisModRec.search.find_cats)
 					])
 
 					this.mods[CKey][MKey] = thisModRec
 
 					if ( thisModRec.filters.has('map') ) {
 						thisCol.mapList.push({
-							icon  : thisMod.modDesc.iconImageCache,
+							icon  : thisMod.modDesc.iconImage,
 							key   : thisMod.colUUID,
 							title : thisMod.fileDetail.shortName,
 						})
@@ -223,6 +247,9 @@ class StateManager {
 			thisCol.sort_title   = thisCol.sorter.sort((a, b) => Intl.Collator().compare(a[3], b[3])).map((x) => x[0])
 			thisCol.sort_version = thisCol.sorter.sort((a, b) => Intl.Collator().compare(a[4], b[4])).map((x) => x[0])
 			thisCol.sort_date    = thisCol.sorter.sort((a, b) => Intl.Collator().compare(b[5], a[5])).map((x) => x[0])
+			thisCol.sort_size    = thisCol.sorter.sort((a, b) => a[6] - b[6]).map((x) => x[0])
+			thisCol.sort_brand   = thisCol.sorter.sort((a, b) => Intl.Collator().compare(a[7], b[7])).map((x) => x[0])
+			thisCol.sort_cat     = thisCol.sorter.sort((a, b) => Intl.Collator().compare(a[8], b[8])).map((x) => x[0])
 		}
 	}
 
@@ -288,9 +315,9 @@ class StateManager {
 	updateUI() {
 		const todayIS = new Date()
 		if ( this.flag.debugMode ) {
-			MA.byId('drag_target', 'fsg-back-3')
+			MA.byId('background_target', 'fsg-back-3')
 		} else if ( todayIS.getMonth() === 3 && todayIS.getDate() === 1 ) {
-			MA.byId('drag_target', 'fsg-back-2')
+			MA.byId('background_target', 'fsg-back-2')
 		}
 
 		MA.queryF('[data-key="game_icon_lg"]').setAttribute('refresh', 'true')
@@ -315,8 +342,8 @@ class StateManager {
 
 	// MARK: translated UI selects
 	async updateI18NDrops() {
-		const finds = ['find_all', 'find_author', 'find_title', 'find_name']
-		const sorts = ['sort_name', 'sort_title', 'sort_author', 'sort_date', 'sort_version']
+		const finds = ['find_all', 'find_author', 'find_brand', 'find_cats', 'find_title', 'find_name']
+		const sorts = ['sort_name', 'sort_title', 'sort_brand', 'sort_author', 'sort_cat', 'sort_date', 'sort_version', 'sort_size']
 
 		const findOptions = finds.map((x) =>
 			window.i18n.get(x).then((r) => DATA.optionFromArray([x, r.entry], this.track.searchType))
@@ -650,6 +677,12 @@ class StateManager {
 		btnNode.appendChild(this.#buttonMaker('check_save', 'primary', () => { window.main_IPC.dispatchSave(CKey) }))
 	}
 
+	#addExtraInfo(item) {
+		return item.length !== 0 ? DATA.escapeSpecial(item.join(', ')) : null
+	}
+	#findExtraInfo(item) {
+		return item.map((x) => x.toLowerCase()).join(' ')
+	}
 	// MARK: addMod
 	/* eslint-disable-next-line complexity */
 	async #addMod(thisMod, overBadges = null, isHolding = false) {
@@ -658,10 +691,12 @@ class StateManager {
 			node    : document.createElement('tr'),
 			scroll  : document.createElement('scroller-item'),
 			search  : {
-				find_author  : DATA.escapeSpecialLC(thisMod.modDesc.author),
+				find_author  : DATA.escapeSpecial(thisMod.modDesc.author).toLowerCase(),
+				find_brand   : this.#findExtraInfo(thisMod.has_brands),
+				find_cats    : this.#findExtraInfo(thisMod.has_cats),
 				find_name    : thisMod.fileDetail.shortName.toLowerCase(),
-				find_title   : DATA.escapeSpecialLC(thisMod.l10n.title),
-				find_version : DATA.escapeSpecialLC(thisMod.modDesc.version),
+				find_title   : this.doL10N(thisMod.l10n.title, true),
+				find_version : this.doL10N(thisMod.modDesc.version, true),
 			},
 		}
 		mod.search.find_all = Object.values(mod.search).join(' ')
@@ -679,10 +714,10 @@ class StateManager {
 		].filter((x) => x !== null))
 	
 		mod.node.id = thisMod.colUUID
-		mod.node.setAttribute('draggable', true)
+		// mod.node.setAttribute('draggable', true)
 	
 		mod.node.addEventListener('contextmenu', () => { this.modContext(thisMod.colUUID) })
-		mod.node.addEventListener('dragstart',   (e) => { this.modDrag(e, thisMod.colUUID) })
+		// mod.node.addEventListener('dragstart',   (e) => { this.modDrag(e, thisMod.colUUID) })
 		mod.node.addEventListener('click',       (e) => { this.modClick(e, thisMod.colUUID) })
 
 		if ( ! thisMod.badgeArray.includes('notmod') && ! thisMod.badgeArray.includes('savegame') ) {
@@ -695,15 +730,29 @@ class StateManager {
 			})
 		}
 
+		const fixCat   = [...new Set(thisMod.has_cats.map((x) => x.split(' ')).flat())].sort()
+		const fixBrand = [...new Set(thisMod.has_brands.map((x) => x.split(' ')).flat())].sort()
+
+		const brandTitle = [
+			fixBrand.length !== 0 ? `<strong>${this.#addExtraInfo(fixBrand)}</strong>` : null,
+			fixBrand.length !== 0 ? '--' : null,
+			this.doL10N(thisMod.l10n.title)
+		]
+		const authorCat = [
+			DATA.escapeSpecial(thisMod.modDesc.author),
+			fixCat.length !== 0 ? '--' : null,
+			fixCat.length !== 0 ? `<em>${this.#addExtraInfo(fixCat)}</em>` : null,
+		]
+
 		mod.node.appendChild(DATA.templateEngine('item_mod', {
-			author     : DATA.escapeSpecial(thisMod.modDesc.author),
+			author_cat : authorCat.filter((x) => x !== null).join(' '),
+			brand_title : brandTitle.filter((x) => x !== null).join(' '),
 			fileDate   : thisMod.fileDetail.fileDate.slice(0, 10),
-			fileSize   : ( thisMod.fileDetail.fileSize > 0 ) ? await DATA.bytesToHR(thisMod.fileDetail.fileSize) : '',
+			fileSize   : await DATA.bytesToHR(thisMod.fileDetail.fileSize),
 			fileTime   : thisMod.fileDetail.fileDate.slice(11, 16),
 			folderIcon : thisMod.badgeArray.includes('folder') ? '<i class="bi bi-folder2-open mod-folder-overlay"></i>' : '',
-			iconImage  : `<img alt="" class="img-fluid" src="${DATA.iconMaker(thisMod.modDesc.iconImageCache)}">`,
+			iconImage  : `<img alt="" class="img-fluid" src="${DATA.iconMaker(thisMod.modDesc.iconImage)}">`,
 			shortname  : thisMod.fileDetail.shortName,
-			title      : DATA.escapeSpecial(thisMod.l10n.title),
 			version    : DATA.escapeSpecial(thisMod.modDesc.version),
 		}))
 
@@ -712,8 +761,7 @@ class StateManager {
 		if ( overBadges !== null ) {
 			badgeContain.innerHTML = overBadges
 		} else {
-			const suppressFilter = isHolding ? '' : `fs${this.flag.currentVersion}`
-			for ( const badge of thisMod?.displayBadges?.filter?.((x) => x.name !== suppressFilter) || [] ) {
+			for ( const badge of thisMod?.displayBadges?.filter?.((x) => isHolding || x.name !== `fs${this.flag.currentVersion}`) || [] ) {
 				badgeContain.appendChild(I18N.buildBadgeMod(badge))
 			}
 		}
@@ -1050,7 +1098,7 @@ class StateManager {
 				
 				return window.main_IPC.folder.active(activePick).then((result) => {
 					if ( this.flag.gameRunning ) {
-						window.l18n.get('game_running_warning').then((entry) => {
+						window.i18n.get('game_running_warning').then((entry) => {
 							alert(entry.entry)
 						})
 					}
@@ -1207,7 +1255,7 @@ class PrefLib {
 			window.state.dragDrop.flags.preventRun = true
 		})
 		MA.byId('prefs--close-btn').addEventListener('click', () => {
-			this.overlay.hide()
+			this.overlay.hide() // Prefs Canvas
 		})
 		window.settings.receive('settings:invalidate', () => { this.forceUpdate() })
 		this.init()
@@ -1413,14 +1461,61 @@ class PrefLib {
 				window?.i18n?.receive('i18n:refresh', lang_update)
 				break
 			}
+			case 'use_discord' : {
+				node.innerHTML = [
+					'<i18n-text class="inset-block-header" data-key="user_pref_title_use_discord"></i18n-text>',
+					'<div class="row gy-2">',
+					'<i18n-text class="inset-block-blurb-option col-10" data-key="user_pref_blurb_use_discord"></i18n-text>',
+					'<div class="form-check form-switch custom-switch col-2">',
+					'<input id="pref--use-discord-check" class="form-check-input" type="checkbox" role="switch">',
+					'</div>',
+					'<i18n-text class="col-6" data-key="user_pref_setting_discord_2"></i18n-text>',
+					'<div class="col-6 px-0"><input type="text" class="form-control" id="pref--use-discord-c2" style="font-size: 70%"></div>',
+					'<i18n-text class="col-6" data-key="user_pref_setting_discord_1"></i18n-text>',
+					'<div class="col-6 px-0"><input type="text" class="form-control" id="pref--use-discord-c1" style="font-size: 70%"></div>',
+					'</div>',
+				].join('')
+				const discord_check = node.querySelector('#pref--use-discord-check')
+				const discord_text_1 = node.querySelector('#pref--use-discord-c1')
+				const discord_text_2 = node.querySelector('#pref--use-discord-c2')
+
+				discord_check.addEventListener('change', () => {
+					window.settings.set('use_discord', discord_check.checked).then((value) => {
+						discord_check.checked = value
+					})
+				})
+
+				discord_text_1.addEventListener('change', () => {
+					window.settings.set('use_discord_c1', discord_text_1.value).then((value) => {
+						discord_text_1.value = value
+					})
+				})
+
+				discord_text_2.addEventListener('change', () => {
+					window.settings.set('use_discord_c2', discord_text_2.value).then((value) => {
+						discord_text_2.value = value
+					})
+				})
+
+				this.update.push(() => {
+					window.settings.get('use_discord').then((value) => {
+						discord_check.checked = value
+					})
+					window.settings.get('use_discord_c1').then((value) => {
+						discord_text_1.value = value
+					})
+					window.settings.get('use_discord_c2').then((value) => {
+						discord_text_2.value = value
+					})
+				})
+				break
+			}
 			case 'cache_manage' :
 				node.innerHTML = [
 					'<i18n-text class="inset-block-header" data-key="user_pref_title_clean_cache"></i18n-text>',
 					'<i18n-text class="inset-block-blurb-option" data-key="user_pref_blurb_clean_cache"></i18n-text>',
 					'<i18n-text class="inset-block-blurb-option text-body-emphasis py-1" data-key="clean_cache_size" id="clean_cache_size"></i18n-text>',
-					'<i18n-text class="inset-block-blurb-option text-body-emphasis py-1" data-key="clean_detail_cache_size" id="clean_detail_cache_size"></i18n-text>',
 					'<i18n-text class="d-block btn btn-success btn-sm w-75 mt-2 mx-auto mb-3" id="pref--cache-clean-btn" data-key="user_pref_button_clean_cache"></i18n-text>',
-					'<i18n-text class="d-block btn btn-warning btn-sm w-75 mt-2 mx-auto mb-3" id="pref--cache-clean-detail-btn" data-key="user_pref_button_clear_detail_cache"></i18n-text>',
 					'<i18n-text class="inset-block-blurb-option" data-key="user_pref_blurb_clear_cache"></i18n-text>',
 					'<i18n-text class="d-block btn btn-danger btn-sm w-75 mt-2 mx-auto" id="pref--cache-clear-btn" data-key="user_pref_button_clear_cache"></i18n-text>',
 					'<i18n-text class="inset-block-blurb-option mt-2" data-key="user_pref_blurb_clear_malware"></i18n-text>',
@@ -1431,14 +1526,10 @@ class PrefLib {
 				this.update.push(() => {
 					MA.byId('clear_malware_size').setAttribute('refresh', 'true')
 					MA.byId('clean_cache_size').setAttribute('refresh', 'true')
-					MA.byId('clean_detail_cache_size').setAttribute('refresh', 'true')
 				})
 
 				node.querySelector('#pref--cache-clean-btn').addEventListener('click', () => {
 					window.main_IPC.cache.clean()
-				})
-				node.querySelector('#pref--cache-clean-detail-btn').addEventListener('click', () => {
-					window.main_IPC.cache.detail()
 				})
 				node.querySelector('#pref--cache-clear-btn').addEventListener('click', () => {
 					window.main_IPC.cache.clear()
@@ -1506,6 +1597,14 @@ class PrefLib {
 			'<div class="form-check form-switch custom-switch col-2">',
 			`<input id="pref--${ver}-dev-mode" class="form-check-input" type="checkbox" role="switch">`,
 			'</div></div></div></div>',
+
+			'<div class="col-12 mt-3 inset-block"><div>',
+			'<i18n-text class="inset-block-header" data-key="user_pref_title_clear"></i18n-text>',
+			'<div class="row">',
+			'<i18n-text class="inset-block-blurb-option col-12 align-self-center" data-key="user_pref_blurb_clear"></i18n-text>',
+			'<div class="col-12 mt-2">',
+			`<i18n-text data-key="user_pref_button_clear" id="pref--${ver}-clear" class="btn btn-sm btn-danger w-100" type="button"></i18n-text>`,
+			'</div></div></div></div>',
 			'</div></div>',
 
 			'</div>',
@@ -1514,11 +1613,13 @@ class PrefLib {
 
 		const button_game_path = node.querySelector(`#pref--${ver}-game-path-btn`)
 		const button_set_path  = node.querySelector(`#pref--${ver}-game-settings-btn`)
+		const button_clear     = node.querySelector(`#pref--${ver}-clear`)
 		const value_game_path  = node.querySelector(`#pref--${ver}-game-path`)
 		const value_set_path   = node.querySelector(`#pref--${ver}-game-settings`)
 		const value_args       = node.querySelector(`#pref--${ver}-game-args`)
 		const switch_dev_mode  = node.querySelector(`#pref--${ver}-dev-mode`)
 		const switch_enabled   = node.querySelector(`#pref--${ver}-game-enabled`)
+
 
 		const arg_cheats = node.querySelector(`#pref--${ver}-game-args-cheat`)
 		const arg_video  = node.querySelector(`#pref--${ver}-game-args-video`)
@@ -1602,6 +1703,12 @@ class PrefLib {
 			window.settings.setPrefFile(ver)
 		})
 
+		button_clear.addEventListener('click', () => {
+			window.settings.clearVer(ver).then(() => {
+				updater()
+			})
+		})
+
 		value_args.addEventListener('change', () => {
 			window.settings.set(`game_args_${ver}`, value_args.value).then((value) => {
 				value_args.value = value
@@ -1663,7 +1770,9 @@ class DragDropLib {
 		dragTarget.addEventListener('dragenter', (e) => { this.dragEnter(e) } )
 		dragTarget.addEventListener('dragleave', (e) => { this.dragLeave(e) } )
 		dragTarget.addEventListener('dragover',  (e) => { this.dragOver(e) } )
+		dragTarget.addEventListener('dragend',   (e) => { this.dragEnd(e) } )
 		dragTarget.addEventListener('drop',      (e) => { this.dragDrop(e) } )
+		dragTarget.addEventListener('dragend',   (e) => { this.dragEnd(e) } )
 
 		this.feedback.backdrop         = MA.byId('drag_back')
 		this.feedback.file             = MA.byId('drag_add_file')
@@ -1672,7 +1781,12 @@ class DragDropLib {
 		this.feedback.text_normal_file = MA.byId('csv-no-text')
 		this.feedback.icon_csv_file    = MA.byId('csv-yes')
 		this.feedback.icon_normal_file = MA.byId('csv-no')
-		
+
+		this.feedback.backdrop.addEventListener('dragenter', (e) => { this.dragEnter(e) } )
+		this.feedback.backdrop.addEventListener('dragleave', (e) => { this.dragLeave(e) } )
+		this.feedback.backdrop.addEventListener('dragover',  (e) => { this.dragOver(e) } )
+		this.feedback.backdrop.addEventListener('dragend',   (e) => { this.dragEnd(e) } )
+		this.feedback.backdrop.addEventListener('drop',      (e) => { this.dragDrop(e) } )
 	}
 
 	resetArea(area) {
@@ -1686,6 +1800,11 @@ class DragDropLib {
 		this.feedback.icon_normal_file.clsHide(isCSV)
 	}
 
+	dragEnd (e) {
+		e.preventDefault()
+		e.stopPropagation()
+	}
+
 	dragDrop (e) {
 		e.preventDefault()
 		e.stopPropagation()
@@ -1693,12 +1812,12 @@ class DragDropLib {
 		if ( window.state.files.flags.isRunning ) { return }
 		if ( this.flags.preventRun ) { return }
 		
+		const types = e.dataTransfer.types
+
+		if (types.length !== 1 || !types.includes('Files')) { return }
+
 		this.flags.isRunning = false
-	
-		this.feedback.backdrop.clsHide()
-		this.resetArea(this.feedback.file)
-		this.resetArea(this.feedback.folder)
-	
+
 		const dt    = e.dataTransfer
 		const files = dt.files
 
@@ -1711,7 +1830,10 @@ class DragDropLib {
 				}
 			})
 		}
-	
+
+		this.feedback.backdrop.clsHide()
+		this.resetArea(this.feedback.file)
+		this.resetArea(this.feedback.folder)
 		this.flags.isFolder = false
 	}
 
@@ -1722,7 +1844,12 @@ class DragDropLib {
 		if ( window.state.files.flags.isRunning ) { return }
 		if ( this.flags.preventRun ) { return }
 
+		const types = e.dataTransfer.types
+
+		if (types.length !== 1 || !types.includes('Files')) { return }
+
 		if ( !this.flags.isRunning ) {
+			
 			this.feedback.backdrop.clsShow()
 		
 			const isCSV = e.dataTransfer.items[0].type === 'text/csv'
@@ -1783,7 +1910,7 @@ class ModalOverlay {
 
 	constructor(id) {
 		this.overlay = new bootstrap.Modal(id, {backdrop : 'static'})
-		this.overlay.hide()
+		this.overlay.hide() // Modal Overlay Class
 	}
 
 	show() {
@@ -1791,7 +1918,7 @@ class ModalOverlay {
 	}
 
 	hide() {
-		this.overlay.hide()
+		this.overlay.hide() // Modal Overlay Class
 	}
 }
 
@@ -1803,11 +1930,11 @@ class LoaderLib {
 	startTime = Date.now()
 
 	constructor() {
-		this.overlay = new bootstrap.Modal('#loadOverlay', { backdrop : 'static', keyboard : false })
+		this.overlay = MA.byId('loadOverlay')
 	}
 
-	hide() { this.overlay?.hide() }
-	show() { this.overlay?.show() }
+	hide() { this.overlay?.clsHide() }
+	show() { this.overlay?.clsShow() }
 
 	hideCount() {
 		MA.byId('loadOverlay_statusCount').clsHide()
@@ -1873,8 +2000,10 @@ class FileLib {
 		operation  : null,
 	}
 
-	overlay      = null
+	overlay      = {}
+	overlayDiv   = null
 	feedback     = null
+	infoData     = null
 
 	dest_multi  = new Set(['import', 'multiCopy', 'multiMove', 'copyFavs'])
 	dest_none   = new Set(['delete'])
@@ -1914,17 +2043,22 @@ class FileLib {
 	selectedMods = {}
 
 	constructor() {
-		this.overlay  = new bootstrap.Offcanvas('#fileOpCanvas')
-		this.feedback = new bootstrap.Modal('#fileOpProgress', { backdrop : 'static', keyboard : false })
-		MA.byId('fileOpCanvas').addEventListener('hide.bs.offcanvas', () => {
+		this.overlayDiv = MA.byId('fileOpCanvas')
+		this.overlay.show = () => {
+			this.overlayDiv.clsShow()
+			this.overlayDiv.querySelector('.fileOpCanvas-body').scrollTop = 0
+		}
+		this.overlay.hide = () => {
+			this.overlayDiv.clsHide()
 			this.stop()
-		})
-		MA.byId('fileOpCanvas').addEventListener('show.bs.offcanvas', () => {
-			MA.byId('fileOpCanvas').querySelector('.offcanvas-body').scrollTop = 0
-		})
+		}
+
+		this.infoData = MA.byId('file_op_display')
+		this.feedback = MA.byId('file_op_result')
+
 		MA.byId('fileOpCanvas-button').addEventListener('click', () => { this.process() })
 		MA.byId('fileOpCanvas-button-close').addEventListener('click', () => {
-			this.overlay.hide()
+			this.overlay.hide() // File Canvas
 		})
 
 		window.main_IPC.receive('files:operation', (mode, mods) => {
@@ -1960,7 +2094,14 @@ class FileLib {
 		switch (mode) {
 			case 'favs' :
 				window.main_IPC.files.listFavs().then((files) => {
-					this.display(mode, files)
+					if ( files === null ) {
+						MA.byId('moveButton_fav').classList.add('btn-shake')
+						setTimeout(() => {
+							MA.byId('moveButton_fav').classList.remove('btn-shake')
+						}, 1500)
+					} else {
+						this.display(mode, files)
+					}
 				})
 				break
 			case 'copy' :
@@ -2076,9 +2217,9 @@ class FileLib {
 	showMod_known(mod) {
 		return DATA.templateEngine('file_op_mod', {
 			folderIcon : mod.fileDetail.isFolder ? '<i class="bi bi-folder2-open mod-folder-overlay"></i>' : '',
-			iconImage  : `<img alt="" class="img-fluid" src="${DATA.iconMaker(mod.modDesc.iconImageCache)}">`,
+			iconImage  : `<img alt="" class="img-fluid" src="${DATA.iconMaker(mod.modDesc.iconImage)}">`,
 			shortname  : mod.fileDetail.shortName,
-			title      : DATA.escapeSpecial(mod.l10n.title),
+			title      : window.state.doL10N(mod.l10n.title),
 		})
 	}
 
@@ -2115,9 +2256,19 @@ class FileLib {
 			}
 		}
 
+		const thisModFileVersion = this.flags.operation !== 'import' ?
+			mod.gameVersion :
+			/FS(\d\d)_/.exec(mod)?.[1] || null
+
 		const node = this.flags.operation !== 'import' ?
 			this.showMod_known(mod) :
-			this.showMod_new(mod, this.lastPayload.isZipImport ? this.lastPayload.zipFiles : null)
+			this.showMod_new(mod, this.lastPayload.isZipImport ? this.lastPayload.zipFiles.map((x) => `${x.name} (${x.size})`) : null)
+
+		if ( thisModFileVersion !== null && parseInt(thisModFileVersion) !== window.state.flag.currentVersion ) {
+			node.querySelector('.version-diff').clsShow()
+		} else {
+			node.querySelector('.version-diff').clsHide()
+		}
 
 		if ( isMulti || isDelete ) {
 			node.querySelector('.no-dest').clsHide()
@@ -2173,6 +2324,8 @@ class FileLib {
 
 		const lookupOp = mods.multiDestination ? `multi${this.flags.operation.slice(0, 1).toUpperCase()}${this.flags.operation.slice(1)}` : this.flags.operation
 
+		this.infoData.clsShow()
+		this.feedback.clsHide()
 		MA.byIdHTML('fileOpCanvas-title', I18N.defer(this.l10n_title[lookupOp], false))
 		MA.byIdHTML('fileOpCanvas-info', I18N.defer(this.l10n_info[lookupOp], false))
 		MA.byIdHTML('fileOpCanvas-button', `${I18N.defer(this.l10n_button[lookupOp], false)} [${this.flags.count}]`)
@@ -2186,6 +2339,7 @@ class FileLib {
 
 		if ( mode !== 'delete' ) {
 			for ( const [key, info] of window.state.mapCollectionFiles ) {
+				if ( key === mods.originCollectKey ) { continue }
 				const node = DATA.templateEngine('file_op_collect_option', {
 					icon : DATA.makeFolderIcon(
 						false,
@@ -2244,7 +2398,8 @@ class FileLib {
 
 		if ( filePayload.length === 0 ) { return }
 
-		this.feedback.show()
+		this.feedback.clsShow()
+		this.infoData.clsHide()
 		MA.byId('fileOpWorking').clsShow()
 		MA.byId('fileOpSuccess').clsHide()
 		MA.byId('fileOpDanger').clsHide()
@@ -2271,10 +2426,11 @@ class FileLib {
 			}
 
 			setTimeout(() => {
-				this.feedback.hide()
-				this.overlay.hide()
+				this.overlay.hide() // File Canvas
 				window.state.select.none()
-				window.main_IPC.folder.reload()
+				setTimeout(() => {
+					window.main_IPC.folder.reload()
+				}, 250)
 			}, didFail ? 5000 : 1500)
 		})
 	}

@@ -1,8 +1,6 @@
-# FS Mod Assistant Community
+# FSG Mod Assistant
 
-[![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://opensource.org/licenses/ISC) ![GitHub release](https://img.shields.io/github/v/release/Blacknight78/FSG_Mod_Assistant)
-
-This is a community-maintained continuation of the original [FSG Mod Assistant](https://github.com/FSGModding/FSG_Mod_Assistant). Original authorship and license notices are preserved.
+[![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://opensource.org/licenses/ISC) ![GitHub release (latest by date)](https://img.shields.io/github/v/release/FSGModding/FSG_Mod_Assistant) ![GitHub Release Date](https://img.shields.io/github/release-date/FSGModding/FSG_Mod_Assistant) [![Crowdin](https://badges.crowdin.net/fsg-mod-assistant/localized.svg)](https://crowdin.com/project/fsg-mod-assistant)
 
 ___This is a mod folder switcher with extra tools___
 
@@ -63,13 +61,13 @@ Please note that this documentation is auto-generated, and may refer to a newer 
 
 ## Usage
 
-Download the installer or portable build from the community [Releases](https://github.com/Blacknight78/FSG_Mod_Assistant/releases) page.
+Download the installer for your platform from the [Releases](https://github.com//FSGModding/FSG_Mod_Assistant/releases) page - the program will install with 1-click, and auto-run when it's ready.
 
 ### Download options
 
 Builds are available for the following:
 
-[Latest Release](https://github.com/Blacknight78/FSG_Mod_Assistant/releases/latest)
+[Latest Release](https://github.com/FSGModding/FSG_Mod_Assistant/releases/latest)
 
 - __win x64 Installer__ : with auto updating
 - __win x64 Portable__ : no need to install, but no auto updating

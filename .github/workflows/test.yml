@@ -2,6 +2,7 @@ name: Node.js CI
 
 on:
   push:
+    branches: [ main ]
   pull_request:
     branches: [ main ]
 
@@ -11,22 +12,18 @@ jobs:
 
     steps:
       - name: Check out Git repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
-      - name: Install Node.js
-        uses: actions/setup-node@v4
+      - name: Install Node.js, NPM and Yarn
+        uses: actions/setup-node@v3
         with:
-          node-version: 22
-          cache: yarn
-
-      - name: Enable Corepack
-        run: corepack enable
+          node-version: 18
 
       - name: Install dependencies
-        run: yarn install --immutable
+        run: yarn
 
       - name: Test code
-        run: yarn test
+        run: npm test
 
       - shell: pwsh
         run: cat TEST_OUTPUT.md >> $env:GITHUB_STEP_SUMMARY

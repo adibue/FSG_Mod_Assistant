@@ -11,25 +11,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out Git repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
-      - name: Install Node.js
-        uses: actions/setup-node@v4
+      - name: Install Node.js, NPM and Yarn
+        uses: actions/setup-node@v3
         with:
-          node-version: 22
-          cache: yarn
-
-      - name: Enable Corepack
-        run: corepack enable
+          node-version: 18
 
       - name: Run install
-        run: yarn install --immutable
+        uses: borales/actions-yarn@v4
+        with:
+          cmd: install # will run `yarn install` command
 
       - name: Get Outdated Versions
         id: outdated-versions
         run: |
           echo 'DEP_OUTPUT<<EOF' >> $GITHUB_ENV
-          yarn depends >> $GITHUB_ENV
+          npm run depends >> $GITHUB_ENV
           echo 'EOF' >> $GITHUB_ENV
 
       - if: ${{ success() }}

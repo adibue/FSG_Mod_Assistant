@@ -13,9 +13,10 @@ const pageName = window.location.pathname.split('/').pop().replace('.html', '').
 const pageAPI = {
 	'basegame' : {
 		functions : {
-			context     : ()         => ipcRenderer.send('context:cutCopyPaste'),
-			openFolder  : (folder)   => ipcRenderer.send('basegame:folder', folder),
-			sendCompare : (aCompare) => ipcRenderer.send('dispatch:compare', aCompare),
+			context     : ()             => ipcRenderer.send('context:cutCopyPaste'),
+			openFolder  : (folder)       => ipcRenderer.send('basegame:folder', folder),
+			sendBase    : (pageObject)   => ipcRenderer.send('dispatch:basegame', pageObject),
+			sendCompare : (compareArray) => ipcRenderer.send('dispatch:compare', compareArray),
 		},
 		validAsync : new Set(['basegame:setPage']),
 	},
@@ -38,8 +39,7 @@ const pageAPI = {
 		functions : {
 			getBinds   : ()    => ipcRenderer.invoke('collect:bindConflict'),
 			getMalware : ()    => ipcRenderer.invoke('collect:malware'),
-			getMod     : (key) => ipcRenderer.invoke('mod:modColUUID', key),
-			getStore   : (key) => ipcRenderer.invoke('store:modColUUID', key),
+			getMod     : (key) => ipcRenderer.invoke('detail:getMod', key),
 
 			sendBase    : (pageObject)   => ipcRenderer.send('dispatch:basegame', pageObject),
 			sendCompare : (compareArray) => ipcRenderer.send('dispatch:compare', compareArray),
@@ -163,6 +163,7 @@ const pageAPI = {
 			},
 		},
 		validAsync : new Set([
+			'files:deleteTrigger',
 			'files:operation',
 			'loading:current',
 			'loading:download',
@@ -213,8 +214,8 @@ const pageAPI = {
 		functions : {
 			cacheDetails   : (content) => ipcRenderer.send('save:cacheGameSave', content),
 			drop : {
-				folder : (path)  => { ipcRenderer.send('save:drop', 'folder', path)},
-				file   : (path)  => { ipcRenderer.send('save:drop', 'zip', path)},
+				folder : (path)  => { ipcRenderer.send('save:drop', 'folder', webUtils.getPathForFile(path))},
+				file   : (path)  => { ipcRenderer.send('save:drop', 'zip', webUtils.getPathForFile(path))},
 			},
 			open : {
 				folder     : ()      => { ipcRenderer.send('save:folder')},
@@ -283,7 +284,7 @@ contextBridge.exposeInMainWorld(
 
 contextBridge.exposeInMainWorld(
 	'i18n', {
-		get  : (key)       => ipcRenderer.invoke('i18n:get', key),
+		get  : (key, ver)  => ipcRenderer.invoke('i18n:get', key, ver),
 		lang : (nv = null) => ipcRenderer.invoke('i18n:lang', nv),
 		list : ()          => ipcRenderer.invoke('i18n:langList'),
 
@@ -301,11 +302,12 @@ contextBridge.exposeInMainWorld(
 
 contextBridge.exposeInMainWorld(
 	'settings', {
+		clearVer    : (ver)      => ipcRenderer.invoke('settings:clear', ver),
 		dev         : ()         => ipcRenderer.invoke('settings:dev'),
 		get         : (key)      => ipcRenderer.invoke('settings:get', key),
 		set         : (k, v)     => ipcRenderer.invoke('settings:set', k, v),
-		setGamePath : (ver = 22) => { ipcRenderer.send('settings:gamePath', ver) },
-		setPrefFile : (ver = 22) => { ipcRenderer.send('settings:prefFile', ver) },
+		setGamePath : (ver = 25) => { ipcRenderer.send('settings:gamePath', ver) },
+		setPrefFile : (ver = 25) => { ipcRenderer.send('settings:prefFile', ver) },
 		site        : (k, v)     => ipcRenderer.invoke('settings:site', k, v),
 		theme       : ()         => ipcRenderer.invoke('settings:theme'),
 		themeChange : (k)        => { ipcRenderer.send('settings:themeChange', k) },
