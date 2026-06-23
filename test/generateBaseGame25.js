@@ -8,7 +8,8 @@
 /* eslint no-await-in-loop: "off" */
 //
 // Usage:
-//   node test/generateBaseGame25.js "C:\Program Files (x86)\Steam\steamapps\common\Farming Simulator 25\data"
+//   node test/generateBaseGame25.js
+//   node test/generateBaseGame25.js "C:\Program Files (x86)\Farming Simulator 2025\data"
 
 /* cSpell:disable */
 const fs                 = require('node:fs')
@@ -19,7 +20,19 @@ const { globSync }       = require('glob')
 const { requiredItems, ddsDecoder } = require('../lib/workerThreadLib.js')
 const { baseLooker }     = require('./generateBaseGame_lib.js')
 
-const dataPath = process.argv[2] ?? 'C:\\Program Files (x86)\\Steam\\steamapps\\common\\Farming Simulator 25\\data'
+const dataPathCandidates = [
+	'C:\\Program Files (x86)\\Farming Simulator 2025\\data',
+	'C:\\Program Files (x86)\\Steam\\steamapps\\common\\Farming Simulator 25\\data',
+	'C:\\Program Files\\Epic Games\\FarmingSimulator25\\data',
+]
+
+const findDataPath = () => {
+	if ( typeof process.argv[2] === 'string' ) { return process.argv[2] }
+
+	return dataPathCandidates.find((thisPath) => fs.existsSync(thisPath)) ?? null
+}
+
+const dataPath = findDataPath()
 const outPath  = process.argv[3] ?? path.join(__dirname, '..', 'renderer', 'renderJS', 'util', 'baseGameData25.js')
 
 const baseData = {
@@ -146,8 +159,8 @@ const handleRecord = (results, fileDetails) => {
 }
 
 const main = async () => {
-	if ( ! fs.existsSync(dataPath) ) {
-		throw new Error(`FS25 data path does not exist: ${dataPath}`)
+	if ( dataPath === null || ! fs.existsSync(dataPath) ) {
+		throw new Error('FS25 data path does not exist. Provide the path manually, for example: node test/generateBaseGame25.js C:\\Program Files (x86)\\Farming Simulator 2025\\data')
 	}
 
 	requiredItems.currentLocale = 'en'
