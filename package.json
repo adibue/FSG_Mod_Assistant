@@ -62,6 +62,8 @@
       "!**/.vscode/*",
       "!.github/*",
       "!/dist/*",
+      "!dist-*",
+      "!dist-*/**",
       "!/docs/*",
       "!/img_src/*",
       "!/renderer/inc/src/*"
