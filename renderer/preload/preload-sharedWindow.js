@@ -38,6 +38,7 @@ const pageAPI = {
 	'detail' : {
 		functions : {
 			getBinds   : ()    => ipcRenderer.invoke('collect:bindConflict'),
+			getGitHub  : (url) => ipcRenderer.invoke('settings:site:githubLatest', url),
 			getMalware : ()    => ipcRenderer.invoke('collect:malware'),
 			getMod     : (key) => ipcRenderer.invoke('detail:getMod', key),
 

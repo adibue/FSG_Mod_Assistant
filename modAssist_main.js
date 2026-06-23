@@ -729,6 +729,69 @@ ipcMain.handle('settings:site', (_, mod, site = false) => {
 	return serveIPC.storeSites.get(mod, '')
 })
 
+ipcMain.handle('settings:site:githubLatest', async (_, sourceURL) => {
+	const repoInfo = getGitHubRepoInfo(sourceURL)
+	if ( repoInfo === null ) {
+		return { ok : false, error : 'invalid_github_url' }
+	}
+
+	const headers = {
+		Accept        : 'application/vnd.github+json',
+		'User-Agent' : 'FS-Mod-Assistant',
+	}
+	const releaseURL = `https://api.github.com/repos/${repoInfo.owner}/${repoInfo.repo}/releases/latest`
+	const tagsURL    = `https://api.github.com/repos/${repoInfo.owner}/${repoInfo.repo}/tags?per_page=1`
+
+	try {
+		const releaseResponse = await fetch(releaseURL, { headers })
+		if ( releaseResponse.ok ) {
+			const release = await releaseResponse.json()
+			return {
+				ok      : true,
+				source  : 'release',
+				url     : release.html_url || repoInfo.htmlURL,
+				version : release.tag_name || release.name || '',
+			}
+		}
+
+		const tagsResponse = await fetch(tagsURL, { headers })
+		if ( tagsResponse.ok ) {
+			const tags = await tagsResponse.json()
+			if ( Array.isArray(tags) && tags.length !== 0 ) {
+				return {
+					ok      : true,
+					source  : 'tag',
+					url     : `https://github.com/${repoInfo.owner}/${repoInfo.repo}/releases/tag/${tags[0].name}`,
+					version : tags[0].name,
+				}
+			}
+		}
+
+		return { ok : false, error : 'no_release_or_tag', url : repoInfo.htmlURL }
+	} catch (err) {
+		return { ok : false, error : err.message, url : repoInfo.htmlURL }
+	}
+})
+
+function getGitHubRepoInfo(sourceURL) {
+	try {
+		const url = new URL(sourceURL)
+		if ( url.protocol !== 'https:' ) { return null }
+		if ( url.hostname.toLowerCase() !== 'github.com' ) { return null }
+
+		const parts = url.pathname.split('/').filter((item) => item !== '')
+		if ( parts.length < 2 ) { return null }
+
+		return {
+			htmlURL : `https://github.com/${parts[0]}/${parts[1]}`,
+			owner   : parts[0],
+			repo    : parts[1],
+		}
+	} catch {
+		return null
+	}
+}
+
 // MARK: download
 ipcMain.on('file:downloadCancel', () => { if ( serveIPC.dlRequest !== null ) { serveIPC.dlRequest.abort() } })
 ipcMain.on('file:download',   (_, CKey) => { funcLib.general.importZIP(CKey) })
