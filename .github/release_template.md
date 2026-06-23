@@ -1,6 +1,6 @@
 # Version x.y.z
 
-New Documentation! (Last full update: 2.7.0) [Check it out!](https://fsgmodding.github.io/FSG_Mod_Assistant/)
+Documentation: https://github.com/Blacknight78/FSG_Mod_Assistant/tree/main/docs
 
 ## What's New?
 

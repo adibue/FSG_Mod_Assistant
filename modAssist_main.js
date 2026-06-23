@@ -872,7 +872,7 @@ ipcMain.on('select:withText', (_, id, txt) => {
 	serveIPC.windowLib.sendAndFocusValid('main', 'select:withText', id, txt)
 })
 ipcMain.on('dispatch:game', ()         => { funcLib.gameLauncher() })
-ipcMain.on('dispatch:help', ()         => { shell.openExternal('https://fsgmodding.github.io/FSG_Mod_Assistant/') })
+ipcMain.on('dispatch:help', ()         => { shell.openExternal('https://github.com/Blacknight78/FSG_Mod_Assistant/tree/main/docs') })
 ipcMain.on('win:clipboard', (_, value) => clipboard.writeText(value, 'selection') )
 ipcMain.on('win:openURL',   (_, url)   => { shell.openExternal(url) })
 ipcMain.on('win:close',     (e)        => { BrowserWindow.fromWebContents(e.sender).close() })
@@ -1054,11 +1054,11 @@ app.whenReady().then(() => {
 		}
 
 		if (process.platform === 'win32') {
-			app.setAppUserModelId('jtsage.fsmodassist')
+			app.setAppUserModelId('com.blacknight78.fsmodassistant.community')
 		}
 		
 		serveIPC.windowLib.tray = new Tray(serveIPC.icon.tray)
-		serveIPC.windowLib.tray.setToolTip('FSG Mod Assist')
+		serveIPC.windowLib.tray.setToolTip('FS Mod Assistant Community')
 		serveIPC.windowLib.tray.on('click', () => { serveIPC.windowLib.win.main.show() })
 		serveIPC.windowLib.trayContextMenu()
 

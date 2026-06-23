@@ -1,6 +1,6 @@
 remote_theme: pages-themes/slate@v0.2.0
 plugins:
 - jekyll-remote-theme
-title: FSG Mod Assistant
+title: FS Mod Assistant Community
 description: This is a mod folder switcher with extra tools for Farm Sim 2022
 show_downloads: false

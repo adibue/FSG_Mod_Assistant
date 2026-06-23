@@ -2711,16 +2711,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"fs.realpath@npm:^1.0.0":
-  version: 1.0.0
-  resolution: "fs.realpath@npm:1.0.0"
-  checksum: 99ddea01a7e75aa276c250a04eedeffe5662bce66c65c07164ad6264f9de18fb21be9433ead460e54cff20e31721c811f4fb5d70591799df5f85dce6d6746fd0
-  languageName: node
-  linkType: hard
-
-"fsg-mod-assistant@workspace:.":
+"fs-mod-assistant-community@workspace:.":
   version: 0.0.0-use.local
-  resolution: "fsg-mod-assistant@workspace:."
+  resolution: "fs-mod-assistant-community@workspace:."
   dependencies:
     "@babel/core": ^7.25.7
     "@babel/eslint-parser": ^7.25.7
@@ -2748,6 +2741,13 @@ __metadata:
     wasm-vips: ^0.0.10
   languageName: unknown
   linkType: soft
+
+"fs.realpath@npm:^1.0.0":
+  version: 1.0.0
+  resolution: "fs.realpath@npm:1.0.0"
+  checksum: 99ddea01a7e75aa276c250a04eedeffe5662bce66c65c07164ad6264f9de18fb21be9433ead460e54cff20e31721c811f4fb5d70591799df5f85dce6d6746fd0
+  languageName: node
+  linkType: hard
 
 "function-bind@npm:^1.1.2":
   version: 1.1.2

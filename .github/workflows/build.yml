@@ -1,37 +1,53 @@
 name: Build/release
 
 on:
+  workflow_dispatch:
   push:
     tags:
       - v*
 
+permissions:
+  contents: write
+
 jobs:
   tagged_release:
-    runs-on: ${{ matrix.os }}
-
-    strategy:
-      matrix:
-        os: [windows-latest]
+    runs-on: windows-latest
 
     steps:
       - name: Check out Git repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Install Node.js, NPM and Yarn
-        uses: actions/setup-node@v3
+      - name: Install Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 22
+          cache: yarn
 
-      - name: Build/release Electron app
-        uses: Yan-Jobs/action-electron-builder@v1.7.0
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Run tests
+        run: yarn test
+
+      - name: Build preview artifacts
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: yarn dist --publish never
+
+      - name: Upload preview artifacts
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        uses: actions/upload-artifact@v4
         with:
-          # GitHub token, automatically provided to the action
-          # (No need to define this secret in the repo settings)
-          github_token: ${{ secrets.github_token }}
+          name: fs-mod-assistant-community-${{ github.sha }}
+          path: |
+            dist/*.exe
+            dist/*.yml
+            dist/*.blockmap
 
-          windows_certs: ${{ secrets.windows_certs }}
-          windows_certs_password: ${{ secrets.windows_certs_password }}
-
-          # If the commit is tagged with a version (e.g. "v1.0.0"),
-          # release the app after building
-          release: ${{ startsWith(github.ref, 'refs/tags/v') }}
+      - name: Build and publish tagged release
+        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        run: yarn dist --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,20 +1,30 @@
 {
-  "name": "fsg-mod-assistant",
-  "version": "5.1.5",
-  "description": "FSG Farm Sim Mod Assistant",
+  "name": "fs-mod-assistant-community",
+  "version": "5.2.0-preview.1",
+  "description": "Community-maintained Farm Sim Mod Assistant",
   "main": "modAssist_main.js",
-  "homepage": "https://github.com/FSGModding/FSG_Mod_Assistant#readme",
+  "homepage": "https://github.com/Blacknight78/FSG_Mod_Assistant#readme",
   "keywords": [],
   "author": {
     "name": "FSG Modding",
     "email": "jtsage+datebox@gmail.com",
     "url": "https://www.fsgmodding.com/"
   },
+  "contributors": [
+    {
+      "name": "Blacknight78",
+      "url": "https://github.com/Blacknight78"
+    }
+  ],
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/FSGModding/FSG_Mod_Assistant/issues/"
+    "url": "https://github.com/Blacknight78/FSG_Mod_Assistant/issues/"
   },
-  "repository": "github:FSGModding/FSG_Mod_Assistant",
+  "repository": "github:Blacknight78/FSG_Mod_Assistant",
+  "engines": {
+    "node": ">=22 <25"
+  },
+  "packageManager": "yarn@3.5.1",
   "scripts": {
     "lang": "node ./test/fix-locale-files.js",
     "pack": "electron-builder --dir",
@@ -52,8 +62,15 @@
     "wasm-vips": "^0.0.10"
   },
   "build": {
-    "appId": "jtsage.fsmodassist",
-    "productName": "FSModAssistant",
+    "appId": "com.blacknight78.fsmodassistant.community",
+    "productName": "FS Mod Assistant Community",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Blacknight78",
+        "repo": "FSG_Mod_Assistant"
+      }
+    ],
     "files": [
       "!README.*",
       "!test/*",
@@ -76,7 +93,7 @@
       ]
     },
     "portable": {
-      "artifactName": "${productName} Portable ${version}.exe"
+      "artifactName": "${productName} Portable ${version}.${ext}"
     }
   }
 }

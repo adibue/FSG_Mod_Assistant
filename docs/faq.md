@@ -38,7 +38,7 @@ To fix this, the easy way:
 
 Please, report it to us!
 
-Please [Open an Issue](https://github.com/FSGModding/FSG_Mod_Assistant/issues/new/choose) and let me know what.  If it is specific to a mod, let me know where to get the mod.  You can also hit CTRL+ALT+D in the app to bring up the debug log - sending that too might be a good idea.
+Please [open an issue](https://github.com/Blacknight78/FSG_Mod_Assistant/issues/new/choose) and describe the problem. If it is specific to a mod, include where to get the mod. You can also press CTRL+ALT+D in the app to open the debug log; attaching that may help.
 
 If the app hard crashes (you'll get a popup message), the crash log can be found in (v1.2.0+ only):
 
