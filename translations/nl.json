@@ -360,6 +360,8 @@
 	"mod_badge_keys_bad__title"             : "Deze mod voegt toetskoppelingen toe aan het spel, sommige kunnen conflicteren",
 	"mod_badge_keys_ok"                     : "toetsen",
 	"mod_badge_keys_ok__title"              : "Deze mod voegt toetskoppelingen toe aan het spel",
+	"mod_badge_github_update"               : "update",
+	"mod_badge_github_update__title"        : "A newer version may be available from the saved GitHub source",
 	"mod_badge_log"                         : "log",
 	"mod_badge_log__title"                  : "Dit is een logbestand van het spel",
 	"mod_badge_malware"                     : "malware",

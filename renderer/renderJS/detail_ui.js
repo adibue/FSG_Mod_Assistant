@@ -332,38 +332,17 @@ class windowState {
 	}
 
 	#versionStatusHTML(localVersion, remoteVersion) {
-		const compareResult = this.#compareVersions(localVersion, remoteVersion)
+		const compareResult = DATA.versionCompare(localVersion, remoteVersion)
 		if ( compareResult < 0 ) {
+			return `<span class="text-warning">${I18N.defer('update_status_available', false)}</span>`
+		}
+		if ( Number.isNaN(compareResult) && DATA.versionDifferent(localVersion, remoteVersion) ) {
 			return `<span class="text-warning">${I18N.defer('update_status_available', false)}</span>`
 		}
 		if ( compareResult === 0 ) {
 			return `<span class="text-success">${I18N.defer('update_status_current', false)}</span>`
 		}
 		return `<span class="text-info">${I18N.defer('update_status_unknown', false)}</span>`
-	}
-
-	#compareVersions(localVersion, remoteVersion) {
-		const localParts  = this.#versionParts(localVersion)
-		const remoteParts = this.#versionParts(remoteVersion)
-		if ( localParts.length === 0 || remoteParts.length === 0 ) { return Number.NaN }
-
-		for ( let i = 0; i < Math.max(localParts.length, remoteParts.length); i++ ) {
-			const localPart  = localParts[i] ?? 0
-			const remotePart = remoteParts[i] ?? 0
-			if ( localPart < remotePart ) { return -1 }
-			if ( localPart > remotePart ) { return 1 }
-		}
-
-		return 0
-	}
-
-	#versionParts(version) {
-		return version.toString()
-			.toLowerCase()
-			.replace(/^v/, '')
-			.split(/\D+/)
-			.filter((item) => item !== '')
-			.map((item) => parseInt(item, 10))
 	}
 
 	// MARK: SUB binds

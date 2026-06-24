@@ -259,6 +259,29 @@ const DATA = {
 	bytesToMB     : async (count, suffix = true) => DATA.bytesToHR(count, { forceMB : true, showSuffix : suffix}),
 	bytesToMBCalc : (bytes) => Math.round((bytes / ( 1024 * 1024) * 100 )) / 100,
 
+	versionCompare : (localVersion, remoteVersion) => {
+		const localParts  = DATA.versionParts(localVersion)
+		const remoteParts = DATA.versionParts(remoteVersion)
+		if ( localParts.length === 0 || remoteParts.length === 0 ) { return Number.NaN }
+
+		for ( let i = 0; i < Math.max(localParts.length, remoteParts.length); i++ ) {
+			const localPart  = localParts[i] ?? 0
+			const remotePart = remoteParts[i] ?? 0
+			if ( localPart < remotePart ) { return -1 }
+			if ( localPart > remotePart ) { return 1 }
+		}
+
+		return 0
+	},
+	versionDifferent : (localVersion, remoteVersion) => DATA.versionNormalize(localVersion) !== DATA.versionNormalize(remoteVersion),
+	versionNormalize : (version) => version.toString().trim().toLowerCase().replace(/^v/, ''),
+	versionParts : (version) => version.toString()
+		.toLowerCase()
+		.replace(/^v/, '')
+		.split(/\D+/)
+		.filter((item) => item !== '')
+		.map((item) => parseInt(item, 10)),
+
 	dateToString : (textDate) => {
 		const year2000 = 949381200000
 		const date = typeof textDate === 'string' ? new Date(Date.parse(textDate)) : textDate

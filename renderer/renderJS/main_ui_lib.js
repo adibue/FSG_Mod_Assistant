@@ -49,6 +49,7 @@ class StateManager {
 	mods        = {}
 	verList     = {}
 	extSites    = {}
+	updateCheckCache = new Map()
 
 	loader = null
 
@@ -421,6 +422,7 @@ class StateManager {
 						if ( this.track.selectedOnly        ) { continue }
 					}
 
+					this.#applyModUpdateBadge(modRec)
 					thisCol.modNodePoint.appendChild(modRec.node)
 					scrollFrag.appendChild(modRec.scroll)
 				}
@@ -698,6 +700,10 @@ class StateManager {
 				find_title   : this.doL10N(thisMod.l10n.title, true),
 				find_version : this.doL10N(thisMod.modDesc.version, true),
 			},
+			updateCheck : {
+				hasGitHubUpdate : false,
+				isComplete      : false,
+			},
 		}
 		mod.search.find_all = Object.values(mod.search).join(' ')
 
@@ -765,8 +771,75 @@ class StateManager {
 				badgeContain.appendChild(I18N.buildBadgeMod(badge))
 			}
 		}
+		this.#refreshModUpdateBadge(thisMod, mod)
 
 		return mod
+	}
+
+	#refreshModUpdateBadge(thisMod, modRec) {
+		if ( thisMod.badgeArray.includes('notmod') || thisMod.badgeArray.includes('savegame') ) { return }
+
+		const localVersion = thisMod.modDesc.version
+		const sourceURL    = this.extSites[thisMod.fileDetail.shortName] || ''
+		if ( !this.#isGitHubURL(sourceURL) ) { return }
+
+		const cacheKey = `${sourceURL}::${localVersion}`
+		if ( !this.updateCheckCache.has(cacheKey) ) {
+			this.updateCheckCache.set(cacheKey, window.main_IPC.getGitHub(sourceURL).then((result) => {
+				if ( !result.ok ) { return false }
+				const compareResult = DATA.versionCompare(localVersion, result.version)
+				return compareResult < 0 || (Number.isNaN(compareResult) && DATA.versionDifferent(localVersion, result.version))
+			}).catch((err) => {
+				window.log.warning('github-update-check', thisMod.fileDetail.shortName, err.message)
+				return false
+			}))
+		}
+
+		this.updateCheckCache.get(cacheKey).then((hasUpdate) => {
+			const hadUpdate = modRec.filters.has('github_update')
+
+			modRec.updateCheck.hasGitHubUpdate = hasUpdate
+			modRec.updateCheck.isComplete      = true
+
+			if ( hasUpdate ) {
+				modRec.filters.add('github_update')
+				this.searchTagList.add('github_update')
+			} else {
+				modRec.filters.delete('github_update')
+			}
+
+			this.#applyModUpdateBadge(modRec)
+
+			if ( hadUpdate !== hasUpdate ) { this.doDisplay() }
+		})
+	}
+
+	#applyModUpdateBadge(modRec) {
+		const badgeContain = modRec.node.querySelector('.issue_badges')
+		if ( badgeContain === null ) { return }
+
+		const oldBadge = badgeContain.querySelector('.badge-mod-github_update')
+		if ( oldBadge !== null ) { oldBadge.remove() }
+
+		if ( !modRec.updateCheck.hasGitHubUpdate ) { return }
+
+		badgeContain.appendChild(this.#buildGitHubUpdateBadge())
+	}
+
+	#buildGitHubUpdateBadge() {
+		const badgeNode = document.createElement('span')
+		badgeNode.classList.add('badge', 'border', 'border-2', 'text-bg-warning', 'border-warning', 'badge-mod-github_update')
+		badgeNode.title = 'A newer version may be available from the saved GitHub source'
+		badgeNode.textContent = 'update'
+		return badgeNode
+	}
+
+	#isGitHubURL(sourceURL) {
+		try {
+			return new URL(sourceURL).hostname.toLowerCase() === 'github.com'
+		} catch {
+			return false
+		}
 	}
 
 	// MARK: col actions
@@ -962,7 +1035,11 @@ class StateManager {
 			const tagNode    = document.createDocumentFragment()
 			const tagNodeTag = document.createElement('div')
 			tagNodeTag.classList.add('col-3', 'text-center', 'py-1')
-			tagNodeTag.appendChild(I18N.buildBadgeMod({name : tag, class : []}))
+			if ( tag === 'github_update' ) {
+				tagNodeTag.appendChild(this.#buildGitHubUpdateBadge())
+			} else {
+				tagNodeTag.appendChild(I18N.buildBadgeMod({name : tag, class : []}))
+			}
 			tagNode.appendChild(tagNodeTag)
 
 			const tagNodeBtn = document.createElement('div')

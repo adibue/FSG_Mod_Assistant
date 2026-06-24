@@ -360,6 +360,8 @@
 	"mod_badge_keys_bad__title"             : "Este mod añade combinaciones de teclas al juego, algunos pueden entrar en conflicto",
 	"mod_badge_keys_ok"                     : "teclas",
 	"mod_badge_keys_ok__title"              : "Este mod añade combinaciones de teclas al juego",
+	"mod_badge_github_update"               : "update",
+	"mod_badge_github_update__title"        : "A newer version may be available from the saved GitHub source",
 	"mod_badge_log"                         : "log",
 	"mod_badge_log__title"                  : "Este es un archivo de registro del juego",
 	"mod_badge_malware"                     : "malware",

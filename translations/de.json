@@ -360,6 +360,8 @@
 	"mod_badge_keys_bad__title"             : "Diese Mod fügt dem Spiel Tastenkombinationen hinzu, einige können Probleme verursachen",
 	"mod_badge_keys_ok"                     : "Tasten",
 	"mod_badge_keys_ok__title"              : "Diese Mod fügt Tastaturbelegungen dem Spiel hinzu",
+	"mod_badge_github_update"               : "update",
+	"mod_badge_github_update__title"        : "A newer version may be available from the saved GitHub source",
 	"mod_badge_log"                         : "Log",
 	"mod_badge_log__title"                  : "Dies ist eine Spielprotokolldatei",
 	"mod_badge_malware"                     : "Schadsoftware / Malware",

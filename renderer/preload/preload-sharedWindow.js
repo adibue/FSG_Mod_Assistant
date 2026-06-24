@@ -117,6 +117,7 @@ const pageAPI = {
 			dispatchSave   : (CKey, file = null) => { ipcRenderer.send('dispatch:save', CKey, file) },
 	
 			cancelDownload    : () => { ipcRenderer.send('file:downloadCancel') },
+			getGitHub         : (url) => ipcRenderer.invoke('settings:site:githubLatest', url),
 			minimizeToTray    : () => { ipcRenderer.send('main:minimizeToTray') },
 			startFarmSim      : () => { ipcRenderer.send('dispatch:game') },
 			updateApplication : () => { ipcRenderer.send('main:runUpdateInstall') },

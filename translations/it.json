@@ -360,6 +360,8 @@
 	"mod_badge_keys_bad__title"             : "Questa mod aggiunge le associazioni di tasti al gioco, alcune possono entrare in conflitto",
 	"mod_badge_keys_ok"                     : "Tasti",
 	"mod_badge_keys_ok__title"              : "Questa mod aggiunge le combinazioni di tasti al gioco",
+	"mod_badge_github_update"               : "update",
+	"mod_badge_github_update__title"        : "A newer version may be available from the saved GitHub source",
 	"mod_badge_log"                         : "log",
 	"mod_badge_log__title"                  : "Questo è un file di log di gioco",
 	"mod_badge_malware"                     : "malware",

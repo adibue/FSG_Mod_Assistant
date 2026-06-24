@@ -739,17 +739,19 @@ ipcMain.handle('settings:site:githubLatest', async (_, sourceURL) => {
 		Accept        : 'application/vnd.github+json',
 		'User-Agent' : 'FS-Mod-Assistant',
 	}
-	const releaseURL = `https://api.github.com/repos/${repoInfo.owner}/${repoInfo.repo}/releases/latest`
-	const tagsURL    = `https://api.github.com/repos/${repoInfo.owner}/${repoInfo.repo}/tags?per_page=1`
 
 	try {
+		const resolvedRepo = await getGitHubResolvedRepo(repoInfo, headers)
+		const releaseURL   = `https://api.github.com/repos/${resolvedRepo.owner}/${resolvedRepo.repo}/releases/latest`
+		const tagsURL      = `https://api.github.com/repos/${resolvedRepo.owner}/${resolvedRepo.repo}/tags?per_page=1`
+
 		const releaseResponse = await fetch(releaseURL, { headers })
 		if ( releaseResponse.ok ) {
 			const release = await releaseResponse.json()
 			return {
 				ok      : true,
 				source  : 'release',
-				url     : release.html_url || repoInfo.htmlURL,
+				url     : release.html_url || resolvedRepo.htmlURL,
 				version : release.tag_name || release.name || '',
 			}
 		}
@@ -761,17 +763,57 @@ ipcMain.handle('settings:site:githubLatest', async (_, sourceURL) => {
 				return {
 					ok      : true,
 					source  : 'tag',
-					url     : `https://github.com/${repoInfo.owner}/${repoInfo.repo}/releases/tag/${tags[0].name}`,
+					url     : `https://github.com/${resolvedRepo.owner}/${resolvedRepo.repo}/releases/tag/${tags[0].name}`,
 					version : tags[0].name,
 				}
 			}
 		}
 
-		return { ok : false, error : 'no_release_or_tag', url : repoInfo.htmlURL }
+		const modDescResult = await getGitHubModDescVersion(resolvedRepo, headers)
+		if ( modDescResult !== null ) { return modDescResult }
+
+		return { ok : false, error : 'no_release_or_tag', url : resolvedRepo.htmlURL }
 	} catch (err) {
 		return { ok : false, error : err.message, url : repoInfo.htmlURL }
 	}
 })
+
+async function getGitHubResolvedRepo(repoInfo, headers) {
+	const repoURL      = `https://api.github.com/repos/${repoInfo.owner}/${repoInfo.repo}`
+	const repoResponse = await fetch(repoURL, { headers })
+	if ( repoResponse.ok ) {
+		const repo = await repoResponse.json()
+		const [owner, repoName] = repo.full_name.split('/')
+		return {
+			defaultBranch : repo.default_branch || 'main',
+			htmlURL       : repo.html_url || `https://github.com/${owner}/${repoName}`,
+			owner         : owner,
+			repo          : repoName,
+		}
+	}
+
+	return {
+		defaultBranch : 'main',
+		...repoInfo,
+	}
+}
+
+async function getGitHubModDescVersion(repoInfo, headers) {
+	const modDescURL      = `https://raw.githubusercontent.com/${repoInfo.owner}/${repoInfo.repo}/${repoInfo.defaultBranch}/modDesc.xml`
+	const modDescResponse = await fetch(modDescURL, { headers })
+	if ( !modDescResponse.ok ) { return null }
+
+	const modDescText  = await modDescResponse.text()
+	const versionMatch = modDescText.match(/<version>\s*([^<]+)\s*<\/version>/i)
+	if ( versionMatch === null ) { return null }
+
+	return {
+		ok      : true,
+		source  : 'modDesc',
+		url     : `${repoInfo.htmlURL}/blob/${repoInfo.defaultBranch}/modDesc.xml`,
+		version : versionMatch[1].trim(),
+	}
+}
 
 function getGitHubRepoInfo(sourceURL) {
 	try {

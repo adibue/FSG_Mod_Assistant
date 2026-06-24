@@ -360,6 +360,8 @@
 	"mod_badge_keys_bad__title"             : "This mod adds keybindings to the game, some may conflict",
 	"mod_badge_keys_ok"                     : "keys",
 	"mod_badge_keys_ok__title"              : "This mod adds keybindings to the game",
+	"mod_badge_github_update"               : "update",
+	"mod_badge_github_update__title"        : "A newer version may be available from the saved GitHub source",
 	"mod_badge_log"                         : "log",
 	"mod_badge_log__title"                  : "This is a game log file",
 	"mod_badge_malware"                     : "malware",

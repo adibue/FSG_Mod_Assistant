@@ -360,6 +360,8 @@
 	"mod_badge_keys_bad__title"             : "Ten mod dodaje skróty klawiszowe do gry, niektóre mogą wchodzić w konflikt",
 	"mod_badge_keys_ok"                     : "Skróty klawiszowe",
 	"mod_badge_keys_ok__title"              : "Ten mod dodaje skróty klawiszowe do gry",
+	"mod_badge_github_update"               : "update",
+	"mod_badge_github_update__title"        : "A newer version may be available from the saved GitHub source",
 	"mod_badge_log"                         : "dziennik",
 	"mod_badge_log__title"                  : "To jest plik dziennika gry",
 	"mod_badge_malware"                     : "złośliwe oprogramowanie",

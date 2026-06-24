@@ -360,6 +360,8 @@
 	"mod_badge_keys_bad__title"             : "Šis mods papildina spēli ar taustiņu piesaistēm, dažas no tām var konfliktēt",
 	"mod_badge_keys_ok"                     : "keys",
 	"mod_badge_keys_ok__title"              : "Šis mods spēlei pievieno taustiņu piesaistes",
+	"mod_badge_github_update"               : "update",
+	"mod_badge_github_update__title"        : "A newer version may be available from the saved GitHub source",
 	"mod_badge_log"                         : "log",
 	"mod_badge_log__title"                  : "Šis ir spēles žurnāla fails",
 	"mod_badge_malware"                     : "ļaunprātīga programmatūra",
