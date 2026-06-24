@@ -105,12 +105,32 @@ function modListTimeout(timeoutMS = 15000) {
 	})
 }
 
+let activeRenderID = 0
+
 function renderEmpty(messageKey) {
 	MA.byIdHTML('modList', '')
 	MA.byIdHTML('updateStatus', I18N.defer(messageKey, false))
+	MA.byId('selectionControls').classList.add('d-none')
+	updateSelectedCount()
 }
 
-async function displayCandidates(candidates) {
+function getUpdateCheckboxes() {
+	return [...document.querySelectorAll('.update-select-checkbox')]
+}
+
+function updateSelectedCount() {
+	const selectedCount = getUpdateCheckboxes().filter((checkbox) => checkbox.checked).length
+	MA.byIdHTML('selectedCount', `${I18N.defer('update_list_selected', false)} ${selectedCount}`)
+}
+
+function setAllSelections(isChecked) {
+	for ( const checkbox of getUpdateCheckboxes() ) {
+		checkbox.checked = isChecked
+	}
+	updateSelectedCount()
+}
+
+async function displayCandidates(candidates, renderID) {
 	const listDiv = MA.byId('modList')
 	const candidateEntries = Object.entries(candidates).sort((a, b) => Intl.Collator().compare(a[0], b[0]))
 	let completeCount = 0
@@ -127,7 +147,9 @@ async function displayCandidates(candidates) {
 	const checkPromises = candidateEntries.map(async ([key, entry]) => {
 		const result = await withTimeout(window.update_IPC.getGitHub(entry.sourceURL))
 		completeCount++
-		MA.byIdHTML('updateStatus', `${I18N.defer('update_list_checking', false)} ${completeCount} / ${candidateEntries.length}`)
+		if ( renderID === activeRenderID ) {
+			MA.byIdHTML('updateStatus', `${I18N.defer('update_list_checking', false)} ${completeCount} / ${candidateEntries.length}`)
+		}
 
 		if ( !result.ok ) { return null }
 		if ( !isUpdateAvailable(entry.local, result.version) ) { return null }
@@ -152,8 +174,11 @@ async function displayCandidates(candidates) {
 
 	const updateRows = (await Promise.all(checkPromises)).filter((x) => x !== null)
 
+	if ( renderID !== activeRenderID ) { return }
+
 	for ( const { node, sourceURL } of updateRows ) {
 		node.firstElementChild.classList.add('bg-warning-subtle')
+		node.querySelector('.update-select-checkbox').addEventListener('change', updateSelectedCount)
 		const sourceButton = node.querySelector('.update-source-button')
 		sourceButton.dataset.sourceUrl = sourceURL
 		sourceButton.addEventListener('click', (event) => {
@@ -165,19 +190,28 @@ async function displayCandidates(candidates) {
 		listDiv.appendChild(node)
 	}
 
+	MA.byId('selectionControls').classList.toggle('d-none', updateRows.length === 0)
+	updateSelectedCount()
+
 	MA.byIdHTML(
 		'updateStatus',
 		updateRows.length === 0 ? I18N.defer('update_list_none_found', false) : `${updateRows.length} ${I18N.defer('update_list_found', false)}`
 	)
 }
 
-function startFromModList(modCollect) {
+async function startFromModList(modCollect) {
+	const renderID = ++activeRenderID
+
 	if ( modCollect === null ) {
 		renderEmpty('update_list_load_failed')
 		return
 	}
 	try {
-		displayCandidates(makeCandidateMap(modCollect))
+		MA.byIdHTML('updateStatus', `${I18N.defer('update_list_checking', false)} ${I18N.defer('update_list_loading', false)}`)
+		MA.byIdHTML('modList', '')
+		MA.byId('selectionControls').classList.add('d-none')
+		updateSelectedCount()
+		await displayCandidates(makeCandidateMap(modCollect), renderID)
 	} catch (err) {
 		MA.byIdText('updateStatus', `Update list error: ${err.message}`)
 	}
@@ -185,19 +219,16 @@ function startFromModList(modCollect) {
 
 // MARK: PAGE LOAD
 window.addEventListener('DOMContentLoaded', () => {
-	let hasStarted = false
-
 	MA.byIdHTML('updateStatus', `${I18N.defer('update_list_checking', false)} ${I18N.defer('update_list_loading', false)}`)
+	MA.byIdEventIfExists('selectAllButton', () => { setAllSelections(true) })
+	MA.byIdEventIfExists('selectNoneButton', () => { setAllSelections(false) })
 
 	window.update_IPC.receive('mods:list', (modCollect) => {
-		if ( hasStarted ) { return }
-		hasStarted = true
 		startFromModList(modCollect)
 	})
 
 	Promise.race([window.update_IPC.get(), modListTimeout()]).then((modCollect) => {
-		if ( hasStarted ) { return }
-		hasStarted = true
+		if ( activeRenderID !== 0 ) { return }
 		startFromModList(modCollect)
 	})
 })

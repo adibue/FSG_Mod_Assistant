@@ -61,6 +61,19 @@
 		<div class="mx-2 mb-3 alert alert-secondary" id="updateStatus">
 			<i18n-text data-key="update_list_checking"></i18n-text>
 		</div>
+		<div class="mx-2 mb-3 d-none" id="selectionControls">
+			<div class="btn-group w-100">
+				<button class="btn btn-outline-success" type="button" id="selectAllButton">
+					<i18n-text data-key="update_list_select_all"></i18n-text>
+				</button>
+				<button class="btn btn-outline-secondary" type="button" id="selectNoneButton">
+					<i18n-text data-key="update_list_select_none"></i18n-text>
+				</button>
+				<button class="btn btn-secondary disabled" type="button" id="selectedCount">
+					<i18n-text data-key="update_list_selected"></i18n-text> 0
+				</button>
+			</div>
+		</div>
 		<div class="list-group mx-2 my-3" id="modList"></div>
 	</div>
 
@@ -68,8 +81,11 @@
 <template id="update_line">
 	<li class="list-group-item d-flex">
 		<div class="d-flex flex-row w-100 justify-content-between">
-			<div class="col-2 p-0 me-3" style="width:64px; height:64px;">
-				<template-var>iconImage</template-var>
+			<div class="col-2 d-flex align-items-center p-0 me-3">
+				<input class="form-check-input update-select-checkbox me-3" type="checkbox" aria-label="Select update candidate">
+				<div style="width:64px; height:64px;">
+					<template-var>iconImage</template-var>
+				</div>
 			</div>
 			<div class="col-5">
 				<div class="fw-bold"><template-var>shortName</template-var></div>
