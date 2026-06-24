@@ -1128,6 +1128,20 @@ class StateManager {
 			this.refreshSelected()
 			this.doSideBar()
 		},
+		updates : () => {
+			if ( this.track.openCollection === null ) { return }
+
+			const CKey = this.track.openCollection
+
+			this.track.selected.clear()
+			for ( const [MKey, modRec] of Object.entries(this.mods[CKey]) ) {
+				if ( modRec.updateCheck.hasGitHubUpdate ) {
+					this.track.selected.add(`${CKey}--${MKey}`)
+				}
+			}
+			this.refreshSelected()
+			this.doSideBar()
+		},
 	}
 
 	// MARK: collect order

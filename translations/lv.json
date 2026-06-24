@@ -593,6 +593,8 @@
 	"select_none__title"                    : "Atcelt visu atlasi (SHIFT+CTRL+A)",
 	"select_only"                           : "Atlasīts",
 	"select_only__title"                    : "Rādīt tikai atlasīto",
+	"select_updates"                        : "updates",
+	"select_updates__title"                 : "Select mods with possible updates",
 	"select_pick"                           : "Select",
 	"sort_author"                           : "Atlasīt : Autors",
 	"sort_brand"                            : "Atlasīt : Zīmols",

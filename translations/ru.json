@@ -593,6 +593,8 @@
 	"select_none__title"                    : "Отменить весь выбор (SHIFT+CTRL+A)",
 	"select_only"                           : "Выбрано",
 	"select_only__title"                    : "Показать только выбранные",
+	"select_updates"                        : "updates",
+	"select_updates__title"                 : "Select mods with possible updates",
 	"select_pick"                           : "Выбрать",
 	"sort_author"                           : "Сортировка: Автор",
 	"sort_brand"                            : "Сортировка: Бренд",

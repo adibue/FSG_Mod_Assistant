@@ -593,6 +593,8 @@
 	"select_none__title"                    : "Zrušit výběr všech (SHIFT + CTRL + A)",
 	"select_only"                           : "Vybrané stránky",
 	"select_only__title"                    : "Zobrazit pouze vybrané",
+	"select_updates"                        : "updates",
+	"select_updates__title"                 : "Select mods with possible updates",
 	"select_pick"                           : "Zvolit",
 	"sort_author"                           : "Třídit : Autor",
 	"sort_brand"                            : "Třídit : Značka",

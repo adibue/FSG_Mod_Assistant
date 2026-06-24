@@ -93,6 +93,7 @@ function topUIHandlers() {
 	MA.byIdEventIfExists('selectButtonNone',   () => { window.state.select.none() })
 	MA.byIdEventIfExists('selectButtonAll',    () => { window.state.select.all() })
 	MA.byIdEventIfExists('selectButtonInvert', () => { window.state.select.invert() })
+	MA.byIdEventIfExists('selectButtonUpdates', () => { window.state.select.updates() })
 
 	MA.byIdEventIfExists('modSortOrder', () => { window.state.changeSort() }, 'change')
 	MA.byIdEventIfExists('modFindType',  () => { window.state.filter.findType()}, 'change')

@@ -593,6 +593,8 @@
 	"select_none__title"                    : "Deselect All (SHIFT+CTRL+A)",
 	"select_only"                           : "Selected",
 	"select_only__title"                    : "Show Only Selected",
+	"select_updates"                        : "updates",
+	"select_updates__title"                 : "Select mods with possible updates",
 	"select_pick"                           : "Select",
 	"sort_author"                           : "Sort : Author",
 	"sort_brand"                            : "Sort : Brand",

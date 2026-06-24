@@ -593,6 +593,8 @@
 	"select_none__title"                    : "Deselecteer alles (SHIFT+CTRL+A)",
 	"select_only"                           : "Geselecteerd",
 	"select_only__title"                    : "Alleen geselecteerde tonen",
+	"select_updates"                        : "updates",
+	"select_updates__title"                 : "Select mods with possible updates",
 	"select_pick"                           : "Selecteer",
 	"sort_author"                           : "Sorteer : Auteur",
 	"sort_brand"                            : "Sorteer : Merk",

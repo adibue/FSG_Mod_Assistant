@@ -593,6 +593,8 @@
 	"select_none__title"                    : "取消选择 (SHIFT+CTRL+A)",
 	"select_only"                           : "Selected",
 	"select_only__title"                    : "只显示选中的",
+	"select_updates"                        : "updates",
+	"select_updates__title"                 : "Select mods with possible updates",
 	"select_pick"                           : "选择",
 	"sort_author"                           : "排序 : 作者",
 	"sort_brand"                            : "排序 : 品牌",

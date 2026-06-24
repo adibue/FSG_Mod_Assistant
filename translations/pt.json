@@ -593,6 +593,8 @@
 	"select_none__title"                    : "Desmarcar todos",
 	"select_only"                           : "Selecionado",
 	"select_only__title"                    : "Mostrar apenas seleccionados",
+	"select_updates"                        : "updates",
+	"select_updates__title"                 : "Select mods with possible updates",
 	"select_pick"                           : "Selecione",
 	"sort_author"                           : "Ordenar : Autor",
 	"sort_brand"                            : "Ordenar : Marca",
