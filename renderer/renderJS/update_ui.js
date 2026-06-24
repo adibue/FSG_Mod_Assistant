@@ -88,12 +88,15 @@ function statusText(result) {
 
 function downloadStatusText(result) {
 	if ( result.hasDownload ) {
-		return `<span class="badge text-bg-success">${I18N.defer('update_list_download_available', false)}</span> <span class="small">${DATA.escapeSpecial(result.assetName)}</span>`
+		const downloadLabel = result.downloadSource === 'repositoryFile' ?
+			I18N.defer('update_list_repo_zip_available', false) :
+			I18N.defer('update_list_download_available', false)
+		return `<span class="badge text-bg-success">${downloadLabel}</span> <span class="small">${DATA.escapeSpecial(result.assetName)}</span>`
 	}
 	if ( result.source === 'release' ) {
 		return `<span class="badge text-bg-warning">${I18N.defer('update_list_no_zip_asset', false)}</span>`
 	}
-	return `<span class="badge text-bg-secondary">${I18N.defer('update_list_open_source_only', false)}</span>`
+	return `<span class="badge text-bg-secondary">${I18N.defer('update_list_source_newer_manual', false)}</span>`
 }
 
 function withTimeout(promise, timeoutMS = 15000) {
@@ -130,8 +133,10 @@ function getUpdateCheckboxes() {
 
 function updateSelectedCount() {
 	const selectedCount = getSelectedCheckboxes().length
+	const downloadableCount = getSelectedDownloadCandidates().length
 	MA.byIdHTML('selectedCount', `${I18N.defer('update_list_selected', false)} ${selectedCount}`)
 	MA.byId('openSelectedButton').disabled = selectedCount === 0
+	MA.byId('downloadSelectedButton').disabled = downloadableCount === 0
 }
 
 function setAllSelections(isChecked) {
@@ -151,6 +156,33 @@ function openSelectedSources() {
 			window.update_IPC.openURL(checkbox.dataset.sourceUrl)
 		}
 	}
+}
+
+function getSelectedDownloadCandidates() {
+	return getSelectedCheckboxes()
+		.filter((checkbox) => typeof checkbox.dataset.downloadUrl === 'string')
+		.map((checkbox) => ({
+			collectionName : checkbox.dataset.collectionName,
+			fileName : checkbox.dataset.assetName,
+			modName  : checkbox.dataset.modName,
+			sourceURL : checkbox.dataset.sourceUrl,
+			url      : checkbox.dataset.downloadUrl,
+		}))
+}
+
+async function downloadSelectedZIPs() {
+	const downloads = getSelectedDownloadCandidates()
+	if ( downloads.length === 0 ) { return }
+
+	MA.byId('downloadSelectedButton').disabled = true
+	MA.byIdHTML('updateStatus', I18N.defer('update_list_downloading', false))
+	const result = await window.update_IPC.downloadSelected(downloads)
+	if ( result.ok ) {
+		MA.byIdHTML('updateStatus', `${I18N.defer('update_list_download_complete', false)} ${result.count} / ${downloads.length}`)
+	} else {
+		MA.byIdHTML('updateStatus', `${I18N.defer('update_list_download_failed', false)} ${result.error}`)
+	}
+	updateSelectedCount()
 }
 
 async function displayCandidates(candidates, renderID) {
@@ -182,7 +214,11 @@ async function displayCandidates(candidates, renderID) {
 			.map((collection) => `<li><span class="fw-bold">${DATA.escapeSpecial(collection)}</span></li>`)
 
 		return {
-			node      : DATA.templateEngine('update_line', {
+			assetName      : result.assetName ?? null,
+			collectionName : entry.collections[0] ?? 'updates',
+			downloadURL    : result.downloadURL ?? null,
+			modName        : key,
+			node           : DATA.templateEngine('update_line', {
 				collections   : collectionList.join(''),
 				downloadStatus : downloadStatusText(result),
 				githubVersion : DATA.escapeSpecial(result.version),
@@ -192,7 +228,6 @@ async function displayCandidates(candidates, renderID) {
 				shortName     : DATA.escapeSpecial(key),
 				statusText    : statusText(result),
 			}),
-			downloadURL : result.downloadURL ?? null,
 			sourceURL : entry.sourceURL,
 		}
 	})
@@ -201,11 +236,14 @@ async function displayCandidates(candidates, renderID) {
 
 	if ( renderID !== activeRenderID ) { return }
 
-	for ( const { downloadURL, node, sourceURL } of updateRows ) {
+	for ( const { assetName, collectionName, downloadURL, modName, node, sourceURL } of updateRows ) {
 		node.firstElementChild.classList.add('bg-warning-subtle')
 		const selectCheckbox = node.querySelector('.update-select-checkbox')
 		if ( downloadURL !== null ) {
+			selectCheckbox.dataset.assetName = assetName
+			selectCheckbox.dataset.collectionName = collectionName
 			selectCheckbox.dataset.downloadUrl = downloadURL
+			selectCheckbox.dataset.modName = modName
 		}
 		selectCheckbox.dataset.sourceUrl = sourceURL
 		selectCheckbox.addEventListener('change', updateSelectedCount)
@@ -253,6 +291,8 @@ window.addEventListener('DOMContentLoaded', () => {
 	MA.byIdEventIfExists('selectAllButton', () => { setAllSelections(true) })
 	MA.byIdEventIfExists('selectNoneButton', () => { setAllSelections(false) })
 	MA.byIdEventIfExists('openSelectedButton', openSelectedSources)
+	MA.byIdEventIfExists('downloadSelectedButton', downloadSelectedZIPs)
+	MA.byIdEventIfExists('historyButton', () => window.update_IPC.dispatchHistory())
 
 	window.update_IPC.receive('mods:list', (modCollect) => {
 		startFromModList(modCollect)

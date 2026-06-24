@@ -68,6 +68,13 @@ const pageAPI = {
 		},
 		validAsync : new Set(),
 	},
+	'history' : {
+		functions : {
+			all     : () => ipcRenderer.invoke('history:all'),
+			context : () => ipcRenderer.send('context:copy'),
+		},
+		validAsync : new Set(),
+	},
 	'importjson' : {
 		functions : {
 			cancelDownload : ()                  => { ipcRenderer.send('file:downloadCancel') },
@@ -103,7 +110,7 @@ const pageAPI = {
 			dispatch        : (win) => {
 				const knownWindows = new Set([
 					'basegame', 'changelog', 'compare', 'debug',
-					'find', 'game', 'gamelog', 'help', 'input', 'mini',
+					'find', 'game', 'gamelog', 'help', 'history', 'input', 'mini',
 					'notes', 'resolve', 'savemanage', 'savetrack',
 					'update', 'version', 'wizard',
 				])
@@ -254,9 +261,11 @@ const pageAPI = {
 	},
 	'update' : {
 		functions : {
-			get       : ()    => ipcRenderer.invoke('update:list'),
-			getGitHub : (url) => ipcRenderer.invoke('settings:site:githubLatest', url),
-			openURL   : (url) => ipcRenderer.send('win:openURL', url),
+			dispatchHistory  : () => ipcRenderer.send('dispatch:history'),
+			downloadSelected : (downloads) => ipcRenderer.invoke('update:downloadSelected', downloads),
+			get              : ()    => ipcRenderer.invoke('update:list'),
+			getGitHub        : (url) => ipcRenderer.invoke('settings:site:githubLatest', url),
+			openURL          : (url) => ipcRenderer.send('win:openURL', url),
 		},
 		validAsync : new Set(['mods:list']),
 	},

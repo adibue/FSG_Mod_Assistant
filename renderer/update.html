@@ -59,6 +59,12 @@
 			<button class="btn btn-success w-100 mt-2" type="button" id="openSelectedButton" disabled>
 				<i18n-text data-key="update_list_open_selected"></i18n-text>
 			</button>
+			<button class="btn btn-warning w-100 mt-2" type="button" id="downloadSelectedButton" disabled>
+				<i18n-text data-key="update_list_download_selected"></i18n-text>
+			</button>
+			<button class="btn btn-secondary w-100 mt-2" type="button" id="historyButton">
+				<i18n-text data-key="history_window"></i18n-text>
+			</button>
 		</div>
 
 		<div class="mx-2 mb-3 alert alert-secondary" id="updateStatus">
@@ -103,7 +109,7 @@
 				<div class="small mb-3"><template-var>statusText</template-var></div>
 				<div class="small mb-3"><template-var>downloadStatus</template-var></div>
 				<button class="btn btn-primary btn-sm w-75 update-source-button" type="button">
-					Open Source
+					<i18n-text data-key="update_list_open_source"></i18n-text>
 				</button>
 			</div>
 		</div>

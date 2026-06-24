@@ -7,7 +7,7 @@
 
 const superDebugCache = false
 
-const { app, BrowserWindow, ipcMain, shell, dialog, Menu, Tray, clipboard } = require('electron')
+const { app, BrowserWindow, ipcMain, shell, dialog, Menu, Tray, clipboard, net } = require('electron')
 
 const isPortable = Object.hasOwn(process.env, 'PORTABLE_EXECUTABLE_DIR')
 const gotTheLock = app.requestSingleInstanceLock()
@@ -19,6 +19,7 @@ const { funcLib }      = require('./lib/modAssist_func_lib.js')
 const { EventEmitter } = require('node:events')
 const path             = require('node:path')
 const fs               = require('node:fs')
+const fsPromise        = require('node:fs/promises')
 const Store            = require('electron-store')
 
 serveIPC.log = new (require('./lib/modUtilLib')).ma_logger('modAssist', app, 'assist.log', gotTheLock)
@@ -75,6 +76,7 @@ serveIPC.storeSet         = new Store({schema : settingDefault.defaults, migrati
 serveIPC.storeCache       = new (require('./lib/modUtilLib.js')).modCacheManager(app.getPath('userData'))
 serveIPC.storeSites       = new Store({name : 'mod_source_site', migrations : settingDefault.migrateSite, clearInvalidConfig : true})
 serveIPC.storeNote        = new Store({name : 'col_notes', clearInvalidConfig : true})
+serveIPC.storeHistory     = new Store({name : 'collection_history', clearInvalidConfig : true})
 
 serveIPC.windowLib.loadSettings()
 
@@ -619,6 +621,7 @@ ipcMain.handle('gamelog:get',     () => funcLib.gameSet.streamGameLog())
 ipcMain.handle('gamelog:getFile', () => funcLib.prefs.gameLogFile())
 ipcMain.on('gamelog:folder',   () => shell.showItemInFolder(funcLib.prefs.gameLogFile()) )
 ipcMain.on('dispatch:gamelog', () => { serveIPC.windowLib.createNamedWindow('gamelog') })
+ipcMain.on('dispatch:history', () => { serveIPC.windowLib.createNamedWindow('history') })
 
 
 // MARK : mini window
@@ -729,7 +732,9 @@ ipcMain.handle('settings:site', (_, mod, site = false) => {
 	return serveIPC.storeSites.get(mod, '')
 })
 
-ipcMain.handle('settings:site:githubLatest', async (_, sourceURL) => {
+ipcMain.handle('settings:site:githubLatest', async (_, sourceURL) => getGitHubLatestUpdate(sourceURL))
+
+async function getGitHubLatestUpdate(sourceURL) {
 	const repoInfo = getGitHubRepoInfo(sourceURL)
 	if ( repoInfo === null ) {
 		return { ok : false, error : 'invalid_github_url' }
@@ -742,53 +747,233 @@ ipcMain.handle('settings:site:githubLatest', async (_, sourceURL) => {
 
 	try {
 		const resolvedRepo = await getGitHubResolvedRepo(repoInfo, headers)
-		const releaseURL   = `https://api.github.com/repos/${resolvedRepo.owner}/${resolvedRepo.repo}/releases/latest`
-		const tagsURL      = `https://api.github.com/repos/${resolvedRepo.owner}/${resolvedRepo.repo}/tags?per_page=1`
+		const releaseResult = await getGitHubReleaseResult(resolvedRepo, headers)
+		if ( releaseResult !== null ) { return releaseResult }
 
-		const releaseResponse = await fetch(releaseURL, { headers })
-		if ( releaseResponse.ok ) {
-			const release = await releaseResponse.json()
-			const zipAsset = getGitHubReleaseZipAsset(release)
-			return {
-				assetName   : zipAsset?.name ?? null,
-				downloadURL : zipAsset?.browser_download_url ?? null,
-				hasDownload : zipAsset !== null,
-				ok          : true,
-				source      : 'release',
-				url         : release.html_url || resolvedRepo.htmlURL,
-				version     : release.tag_name || release.name || '',
-			}
-		}
-
-		const tagsResponse = await fetch(tagsURL, { headers })
-		if ( tagsResponse.ok ) {
-			const tags = await tagsResponse.json()
-			if ( Array.isArray(tags) && tags.length !== 0 ) {
-				return {
-					ok      : true,
-					source  : 'tag',
-					url     : `https://github.com/${resolvedRepo.owner}/${resolvedRepo.repo}/releases/tag/${tags[0].name}`,
-					version : tags[0].name,
-				}
-			}
-		}
-
-		const modDescResult = await getGitHubModDescVersion(resolvedRepo, headers)
-		if ( modDescResult !== null ) { return modDescResult }
+		const stableReleaseResult = await getGitHubStableReleaseResult(resolvedRepo)
+		if ( stableReleaseResult !== null ) { return stableReleaseResult }
 
 		return { ok : false, error : 'no_release_or_tag', url : resolvedRepo.htmlURL }
 	} catch (err) {
 		return { ok : false, error : err.message, url : repoInfo.htmlURL }
 	}
-})
+}
+
+async function getGitHubReleaseResult(resolvedRepo, headers) {
+	const releaseURL      = `https://api.github.com/repos/${resolvedRepo.owner}/${resolvedRepo.repo}/releases/latest`
+	const releaseResponse = await fetch(releaseURL, { headers })
+	if ( !releaseResponse.ok ) { return null }
+
+	const release  = await releaseResponse.json()
+	const zipAsset = getGitHubReleaseZipAsset(release) ?? await getGitHubRepoZipAsset(resolvedRepo, headers)
+	return {
+		assetName      : zipAsset?.name ?? null,
+		downloadSource : zipAsset?.downloadSource ?? null,
+		downloadURL    : zipAsset?.browser_download_url ?? zipAsset?.download_url ?? null,
+		hasDownload    : zipAsset !== null,
+		ok             : true,
+		source         : 'release',
+		url            : release.html_url || resolvedRepo.htmlURL,
+		version        : release.tag_name || release.name || '',
+	}
+}
+
+async function getGitHubStableReleaseResult(resolvedRepo) {
+	const releaseURL       = await getGitHubStableReleaseURL(resolvedRepo)
+	const releaseMatch     = releaseURL.match(/\/releases\/tag\/([^#/?]+)/)
+	if ( releaseMatch === null ) { return null }
+
+	const stableTag = decodeURIComponent(releaseMatch[1])
+	if ( isGitHubPrereleaseTag(stableTag) ) { return null }
+
+	const releaseRepo = getGitHubRepoInfo(releaseURL) ?? resolvedRepo
+	const zipAsset = await getGitHubStableReleaseNamedZipAsset(releaseRepo, stableTag)
+	if ( zipAsset === null ) { return null }
+
+	return {
+		assetName      : zipAsset?.name ?? null,
+		downloadSource : zipAsset?.downloadSource ?? null,
+		downloadURL    : zipAsset.download_url,
+		hasDownload    : zipAsset !== null,
+		ok             : true,
+		source         : 'release',
+		url            : `${releaseRepo.htmlURL}/releases/tag/${stableTag}`,
+		version        : stableTag,
+	}
+}
+
+async function getGitHubStableReleaseURL(resolvedRepo) {
+	return getGitHubStableReleaseRedirectURL(`${resolvedRepo.htmlURL}/releases/latest`, 0)
+}
+
+async function getGitHubStableReleaseRedirectURL(latestReleaseURL, redirectCount) {
+	if ( redirectCount >= 5 ) { return latestReleaseURL }
+
+	const releaseResponse = await fetch(latestReleaseURL, { method : 'HEAD', redirect : 'manual' })
+	const redirectURL = releaseResponse.headers.get('location')
+
+	if ( redirectURL === null ) { return releaseResponse.url }
+
+	const nextURL = new URL(redirectURL, latestReleaseURL).toString()
+	if ( nextURL.includes('/releases/tag/') ) { return nextURL }
+	return getGitHubStableReleaseRedirectURL(nextURL, redirectCount + 1)
+}
 
 function getGitHubReleaseZipAsset(release) {
 	if ( !Array.isArray(release.assets) ) { return null }
-	return release.assets.find((asset) => {
+	const zipAsset = release.assets.find((asset) => {
 		if ( typeof asset?.name !== 'string' ) { return false }
 		if ( typeof asset?.browser_download_url !== 'string' ) { return false }
 		return asset.name.toLowerCase().endsWith('.zip')
 	}) ?? null
+	if ( zipAsset !== null ) { zipAsset.downloadSource = 'releaseAsset' }
+	return zipAsset
+}
+
+async function getGitHubRepoZipAsset(repoInfo, headers) {
+	const contentsURL      = `https://api.github.com/repos/${repoInfo.owner}/${repoInfo.repo}/contents?ref=${repoInfo.defaultBranch}`
+	const contentsResponse = await fetch(contentsURL, { headers })
+	if ( !contentsResponse.ok ) { return getGitHubRepoNamedZipAsset(repoInfo) }
+
+	const contents = await contentsResponse.json()
+	if ( !Array.isArray(contents) ) { return getGitHubRepoNamedZipAsset(repoInfo) }
+
+	const zipFiles = contents.filter((item) => {
+		if ( item?.type !== 'file' ) { return false }
+		if ( typeof item?.name !== 'string' ) { return false }
+		if ( typeof item?.download_url !== 'string' ) { return false }
+		return item.name.toLowerCase().endsWith('.zip')
+	})
+
+	if ( zipFiles.length === 0 ) { return getGitHubRepoNamedZipAsset(repoInfo) }
+
+	const repoName = repoInfo.repo.toLowerCase()
+	const zipAsset = zipFiles.find((item) => {
+		const itemName = item.name.toLowerCase()
+		return itemName === `${repoName}.zip` || itemName.includes(repoName)
+	}) ?? zipFiles[0]
+
+	return {
+		downloadSource : 'repositoryFile',
+		download_url   : zipAsset.download_url,
+		name           : zipAsset.name,
+	}
+}
+
+async function getGitHubRepoNamedZipAsset(repoInfo) {
+	const fileName = `${repoInfo.repo}.zip`
+	const branches = [...new Set([repoInfo.defaultBranch, 'main', 'master'].filter((branch) => typeof branch === 'string' && branch !== ''))]
+
+	const candidates = await Promise.all(branches.map(async (branch) => {
+		const downloadURL = `https://raw.githubusercontent.com/${repoInfo.owner}/${repoInfo.repo}/${branch}/${fileName}`
+		try {
+			const response = await fetch(downloadURL, { method : 'HEAD' })
+			if ( response.ok ) {
+				return {
+					downloadSource : 'repositoryFile',
+					download_url   : downloadURL,
+					name           : fileName,
+				}
+			}
+		} catch {
+			return null
+		}
+		return null
+	}))
+
+	return candidates.find((candidate) => candidate !== null) ?? null
+}
+
+async function getGitHubStableReleaseNamedZipAsset(repoInfo, stableTag) {
+	const fileName = `${repoInfo.repo}.zip`
+	const downloadURL = `${repoInfo.htmlURL}/releases/download/${stableTag}/${fileName}`
+	try {
+		const response = await fetch(downloadURL, { method : 'HEAD' })
+		if ( response.ok ) {
+			return {
+				downloadSource : 'releaseAsset',
+				download_url   : downloadURL,
+				name           : fileName,
+			}
+		}
+	} catch {
+		return null
+	}
+	return null
+}
+
+function isGitHubPrereleaseTag(tagName) {
+	return /(?:^|[.-])(?:alpha|beta|dev|preview|pre|rc)(?:[.-]|\d|$)/i.test(tagName)
+}
+
+async function downloadGitHubUpdateZip(download, downloadFolder) {
+	if ( typeof download?.url !== 'string' || typeof download?.fileName !== 'string' ) {
+		throw new Error('Invalid download candidate')
+	}
+
+	const url = new URL(download.url)
+	if ( url.protocol !== 'https:' ) { throw new Error('Only HTTPS downloads are allowed') }
+	if ( !download.fileName.toLowerCase().endsWith('.zip') ) { throw new Error('Only ZIP downloads are allowed') }
+
+	const fileName = safeDownloadFileName(download.fileName)
+	const filePath = path.join(downloadFolder, fileName)
+	const replacedExisting = fs.existsSync(filePath)
+
+	await new Promise((resolve, reject) => {
+		const request = net.request(download.url)
+		request.on('response', (response) => {
+			if ( response.statusCode < 200 || response.statusCode >= 400 ) {
+				reject(new Error(`Download failed with status ${response.statusCode}`))
+				return
+			}
+
+			const writeStream = fs.createWriteStream(filePath)
+			response.pipe(writeStream)
+			response.on('error', reject)
+			writeStream.on('error', reject)
+			writeStream.on('finish', () => {
+				writeStream.close(resolve)
+			})
+		})
+		request.on('error', reject)
+		request.end()
+	})
+
+	return {
+		filePath,
+		replacedExisting,
+	}
+}
+
+function addCollectionHistoryEntry(entry) {
+	const historyEntries = serveIPC.storeHistory.get('entries', [])
+	const cleanEntry = {
+		action           : entry.action ?? 'unknown',
+		collectionName   : entry.collectionName ?? null,
+		fileName         : entry.fileName ?? null,
+		modName          : entry.modName ?? null,
+		replacedExisting : entry.replacedExisting ?? false,
+		source           : entry.source ?? null,
+		sourceURL        : entry.sourceURL ?? null,
+		stagedPath       : entry.stagedPath ?? null,
+		timestamp        : new Date().toISOString(),
+	}
+
+	historyEntries.unshift(cleanEntry)
+	serveIPC.storeHistory.set('entries', historyEntries.slice(0, 1000))
+}
+
+function safeDownloadFileName(fileName) {
+	const safeName = path.basename(fileName).replace(/["*/:<>?\\|]/g, '_')
+	if ( safeName === '' || safeName === '.' || safeName === '..' ) { return 'github-update.zip' }
+	return safeName
+}
+
+function safeDownloadFolderName(folderName) {
+	if ( typeof folderName !== 'string' ) { return 'updates' }
+	const safeName = folderName.replace(/["*/:<>?\\|]/g, '_').trim()
+	if ( safeName === '' || safeName === '.' || safeName === '..' ) { return 'updates' }
+	return safeName
 }
 
 async function getGitHubResolvedRepo(repoInfo, headers) {
@@ -808,23 +993,6 @@ async function getGitHubResolvedRepo(repoInfo, headers) {
 	return {
 		defaultBranch : 'main',
 		...repoInfo,
-	}
-}
-
-async function getGitHubModDescVersion(repoInfo, headers) {
-	const modDescURL      = `https://raw.githubusercontent.com/${repoInfo.owner}/${repoInfo.repo}/${repoInfo.defaultBranch}/modDesc.xml`
-	const modDescResponse = await fetch(modDescURL, { headers })
-	if ( !modDescResponse.ok ) { return null }
-
-	const modDescText  = await modDescResponse.text()
-	const versionMatch = modDescText.match(/<version>\s*([^<]+)\s*<\/version>/i)
-	if ( versionMatch === null ) { return null }
-
-	return {
-		ok      : true,
-		source  : 'modDesc',
-		url     : `${repoInfo.htmlURL}/blob/${repoInfo.defaultBranch}/modDesc.xml`,
-		version : versionMatch[1].trim(),
 	}
 }
 
@@ -951,6 +1119,40 @@ ipcMain.handle('update:list', () => serveIPC.modCollect.toRenderer({
 	activeCollection : serveIPC.gameSetOverride.index,
 	modSites         : serveIPC.storeSites.store,
 }))
+ipcMain.handle('history:all', () => serveIPC.storeHistory.get('entries', []))
+ipcMain.handle('update:downloadSelected', async (_, downloads) => {
+	try {
+		if ( !Array.isArray(downloads) || downloads.length === 0 ) {
+			return { ok : false, error : 'No downloadable ZIPs selected' }
+		}
+
+		const downloadFolder = path.join(app.getPath('userData'), 'update-downloads')
+		await fsPromise.mkdir(downloadFolder, { recursive : true })
+
+		const downloadCount = await downloads.reduce(async (previousCount, download) => {
+			const count = await previousCount
+			const collectionFolder = path.join(downloadFolder, safeDownloadFolderName(download.collectionName))
+			await fsPromise.mkdir(collectionFolder, { recursive : true })
+			const downloadResult = await downloadGitHubUpdateZip(download, collectionFolder)
+			addCollectionHistoryEntry({
+				action           : 'update_staged',
+				collectionName   : download.collectionName,
+				fileName         : download.fileName,
+				modName          : download.modName,
+				replacedExisting : downloadResult.replacedExisting,
+				source           : 'GitHub',
+				sourceURL        : download.sourceURL,
+				stagedPath       : downloadResult.filePath,
+			})
+			return count + 1
+		}, Promise.resolve(0))
+
+		shell.openPath(downloadFolder)
+		return { count : downloadCount, folder : downloadFolder, ok : true }
+	} catch (err) {
+		return { ok : false, error : err.message }
+	}
+})
 ipcMain.on('dispatch:resolve', (_, key) => { serveIPC.windowLib.createNamedWindow('resolve', { shortName : key }) })
 
 // MARK: debug log

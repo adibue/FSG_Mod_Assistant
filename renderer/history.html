@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<!-- _______           __ _______               __         __
+		|   |   |.-----.--|  |   _   |.-----.-----.|__|.-----.|  |_
+		|       ||  _  |  _  |       ||__ --|__ --||  ||__ --||   _|
+		|__|_|__||_____|_____|___|___||_____|_____||__||_____||____|
+		(c) 2022-present FSG Modding.  MIT License. -->
+
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline';">
+	<link rel="stylesheet" href="inc/bootstrap.min.css">
+	<link rel="stylesheet" href="inc/fsico.css">
+	<script src="inc/bootstrap.bundle.min.js"></script>
+	<script src="renderJS/util/util_lib.js"></script>
+	<script src="renderJS/history_ui.js"></script>
+	<style>
+		.history-path {
+			word-break: break-all;
+		}
+	</style>
+</head>
+<body data-bs-theme="dark" class="overflow-custom2">
+	<div class="container-fluid px-2 user-select-none">
+		<div class="sticky-top pb-2 bg-body border-bottom mb-3">
+			<div class="row w-100 g-0" style="-webkit-app-region: drag;">
+				<div class="col-7 pt-2">
+					<i18n-text class="h2 ps-2 mastHead" data-key="app_name"></i18n-text>
+				</div>
+				<div class="col-5 pt-4 mt-3">
+					<i18n-text class="badge bg-info text-dark mx-auto w-100 d-block rounded-3 h4 fs-5" data-key="history_window"></i18n-text>
+				</div>
+			</div>
+		</div>
+		<div class="mx-2 mb-3 alert alert-secondary" id="historyStatus">
+			<i18n-text data-key="history_loading"></i18n-text>
+		</div>
+		<div class="mx-2 mb-3 card">
+			<div class="card-body">
+				<div class="row g-2">
+					<div class="col-md-3">
+						<label class="form-label small" for="historyCollectionFilter">
+							<i18n-text data-key="history_filter_collection"></i18n-text>
+						</label>
+						<select class="form-select form-select-sm" id="historyCollectionFilter"></select>
+					</div>
+					<div class="col-md-3">
+						<label class="form-label small" for="historyActionFilter">
+							<i18n-text data-key="history_filter_action"></i18n-text>
+						</label>
+						<select class="form-select form-select-sm" id="historyActionFilter"></select>
+					</div>
+					<div class="col-md-3">
+						<label class="form-label small" for="historyFromFilter">
+							<i18n-text data-key="history_filter_from"></i18n-text>
+						</label>
+						<input class="form-control form-control-sm" id="historyFromFilter" type="date">
+					</div>
+					<div class="col-md-3">
+						<label class="form-label small" for="historyToFilter">
+							<i18n-text data-key="history_filter_to"></i18n-text>
+						</label>
+						<input class="form-control form-control-sm" id="historyToFilter" type="date">
+					</div>
+					<div class="col-md-9">
+						<label class="form-label small" for="historyTextFilter">
+							<i18n-text data-key="history_filter_search"></i18n-text>
+						</label>
+						<input class="form-control form-control-sm" id="historyTextFilter" type="search">
+					</div>
+					<div class="col-md-3 d-flex align-items-end">
+						<button class="btn btn-sm btn-secondary w-100" id="historyClearFilters" type="button">
+							<i18n-text data-key="history_filter_clear"></i18n-text>
+						</button>
+					</div>
+				</div>
+			</div>
+		</div>
+		<div class="list-group mx-2 my-3" id="historyList"></div>
+	</div>
+
+<template id="history_line">
+	<li class="list-group-item">
+		<div class="d-flex justify-content-between gap-3">
+			<div>
+				<div class="fw-bold"><template-var>modName</template-var></div>
+				<div class="small fst-italic"><template-var>fileName</template-var></div>
+			</div>
+			<div class="text-end">
+				<div><span class="badge text-bg-info"><template-var>action</template-var></span></div>
+				<div class="small"><template-var>timestamp</template-var></div>
+			</div>
+		</div>
+		<div class="mt-2">
+			<span class="badge text-bg-secondary"><template-var>collectionName</template-var></span>
+			<span class="badge text-bg-warning"><template-var>source</template-var></span>
+			<template-var>replaceBadge</template-var>
+		</div>
+		<div class="small mt-2 history-path user-select-text"><template-var>stagedPath</template-var></div>
+		<div class="small mt-1 history-path user-select-text"><template-var>sourceURL</template-var></div>
+	</li>
+</template>
+
+</body>
+</html>
