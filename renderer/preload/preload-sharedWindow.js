@@ -105,7 +105,7 @@ const pageAPI = {
 					'basegame', 'changelog', 'compare', 'debug',
 					'find', 'game', 'gamelog', 'help', 'input', 'mini',
 					'notes', 'resolve', 'savemanage', 'savetrack',
-					'version', 'wizard',
+					'update', 'version', 'wizard',
 				])
 				if ( knownWindows.has(win) ) {
 					ipcRenderer.send(`dispatch:${win}`)
@@ -249,6 +249,14 @@ const pageAPI = {
 		functions : {
 			addFolder : ( folder, version ) => { ipcRenderer.send('folders:addDirect', folder, version) },
 			update    : () => ipcRenderer.invoke('wizard:update'),
+		},
+		validAsync : new Set(['mods:list']),
+	},
+	'update' : {
+		functions : {
+			get       : ()    => ipcRenderer.invoke('update:list'),
+			getGitHub : (url) => ipcRenderer.invoke('settings:site:githubLatest', url),
+			openURL   : (url) => ipcRenderer.send('win:openURL', url),
 		},
 		validAsync : new Set(['mods:list']),
 	},

@@ -933,6 +933,11 @@ ipcMain.handle('input:restore', (_, s, v) => funcLib.inputManage.restore(s, v))
 
 // MARK: version resolve
 ipcMain.on('dispatch:version', () => { serveIPC.windowLib.createNamedWindow('version') })
+ipcMain.on('dispatch:update', () => { serveIPC.windowLib.createNamedWindow('update') })
+ipcMain.handle('update:list', () => serveIPC.modCollect.toRenderer({
+	activeCollection : serveIPC.gameSetOverride.index,
+	modSites         : serveIPC.storeSites.store,
+}))
 ipcMain.on('dispatch:resolve', (_, key) => { serveIPC.windowLib.createNamedWindow('resolve', { shortName : key }) })
 
 // MARK: debug log

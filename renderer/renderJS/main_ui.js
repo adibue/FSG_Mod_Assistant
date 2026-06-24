@@ -77,6 +77,7 @@ function topBarHandlers() {
 //MARK: side bar event
 function sideBarHandlers() {
 	MA.byIdEventIfExists('moveButton_ver', () => { window.main_IPC.dispatch('version') })
+	MA.byIdEventIfExists('moveButton_updateList', () => { window.main_IPC.dispatch('update') })
 	MA.byIdEventIfExists('moveButton_fav', () => { window.state.startFile('favs') })
 
 	MA.byIdEventIfExists('moveButton_move',   () => { window.state.startFile('move') })
