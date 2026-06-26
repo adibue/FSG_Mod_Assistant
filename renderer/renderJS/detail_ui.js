@@ -39,6 +39,7 @@ class windowState {
 		window.detail_IPC.getMod(this.modColUUID).then(async (thisResponse) => {
 			this.mod       = thisResponse[0]
 			this.storeInfo = thisResponse[1]
+			this.#resetDynamicPage()
 
 			I18N.local_entries = this.storeInfo.l10n[this.locale] || this.storeInfo.l10n.en || {}
 
@@ -106,6 +107,27 @@ class windowState {
 		for ( const element of MA.query('.inset-block-header-show-hide i18n-text') ) {
 			element.addEventListener('click', this.showHideClicker)
 		}
+	}
+
+	#resetDynamicPage() {
+		window.lookItemMap = {}
+
+		MA.byIdHTML('badges', '')
+		MA.byIdHTML('problems', '')
+		MA.byIdHTML('keyBinds', '')
+		MA.byIdHTML('crop-table', '')
+		MA.byIdHTML('storeitems', '')
+
+		MA.byId('problem_div')?.clsShow()
+		MA.byId('cropcal_div')?.clsHide()
+		MA.byId('detail_crop_json')?.clsHide()
+		MA.byId('store_div')?.clsHide()
+		MA.byId('map_image_div')?.clsHide()
+		MA.byId('malware-found')?.clsHide()
+		MA.byId('download_latest_update')?.clsHide()
+		MA.byId('rollback_latest_update')?.clsHide()
+		MA.byId('rollback_versions')?.clsHide()
+		MA.byIdHTML('rollback_versions', '')
 	}
 
 	// MARK: crops
@@ -205,6 +227,7 @@ class windowState {
 
 		const tempTitle = this.#doL10N(this.mod.l10n.title)
 		const sourceURL = await window.settings.site(this.mod.fileDetail.shortName, false)
+		const collectionName = await window.detail_IPC.collectName(this.mod.currentCollection)
 
 		const idMap = {
 			description    : this.#doL10N(this.mod.l10n.description),
@@ -218,6 +241,7 @@ class windowState {
 				`<a href="https://www.farming-simulator.com/mod.php?mod_id=${this.mod.modHub.id}" target="_BLANK">${this.mod.modHub.version}</a>` :
 				`<em>${I18N.defer(this.mod.modHub.id === null ? 'mh_norecord' : 'mh_unknown', false )}</em>`,
 			mod_author     : DATA.escapeSpecial(this.mod.modDesc.author),
+			mod_collection : `${I18N.defer('detail_mod_collection', false)}: ${DATA.escapeSpecial(collectionName ?? this.mod.currentCollection)}`,
 			mod_location   : this.mod.fileDetail.fullPath,
 			store_items    : DATA.checkX(this.mod.modDesc.storeItems),
 			title          : (( tempTitle !== '--' ) ? tempTitle : this.mod.fileDetail.shortName),
@@ -306,32 +330,193 @@ class windowState {
 
 	#refreshGitHubVersion(sourceURL) {
 		if ( !this.#isGitHubURL(sourceURL) ) {
+			const updatePointer = this.#updatePointer(null, sourceURL)
 			MA.byIdHTML('github_version', `<em>${I18N.defer('update_source_not_configured', false )}</em>`)
 			MA.byIdHTML('update_status', `<em>${I18N.defer('update_source_not_configured', false )}</em>`)
+			MA.byId('download_latest_update')?.clsHide()
+			window.detail_IPC.hasRollbackBackup(updatePointer).then((hasRollbackBackup) => {
+				this.#refreshRollbackButton(updatePointer, hasRollbackBackup)
+				this.#refreshRollbackVersions(updatePointer, hasRollbackBackup)
+			})
 			return
 		}
 
 		MA.byIdText('github_version', I18N.defer('update_status_checking', false))
 		MA.byIdText('update_status', I18N.defer('update_status_checking', false))
 
-		window.detail_IPC.getGitHub(sourceURL).then((result) => {
+		window.detail_IPC.getGitHub(sourceURL).then(async (result) => {
+			const updatePointer = this.#updatePointer(result.assetName ?? null, sourceURL)
 			if ( !result.ok ) {
 				MA.byIdHTML('github_version', `<em>${I18N.defer(result.error === 'no_release_or_tag' ? 'update_status_no_github_release' : 'update_status_failed', false )}</em>`)
 				MA.byIdHTML('update_status', `<span class="text-warning">${I18N.defer('update_status_unknown', false)}</span>`)
+				MA.byId('download_latest_update')?.clsHide()
+				const hasRollbackBackup = await window.detail_IPC.hasRollbackBackup(updatePointer)
+				this.#refreshRollbackButton(updatePointer, hasRollbackBackup)
+				this.#refreshRollbackVersions(updatePointer, hasRollbackBackup)
 				return
 			}
 
+			const hasRollbackBackup = await window.detail_IPC.hasRollbackBackup(updatePointer)
 			const safeVersion = DATA.escapeSpecial(result.version)
 			const safeURL     = DATA.escapeSpecial(result.url)
 			MA.byIdHTML('github_version', `<a href="${safeURL}" target="_BLANK">${safeVersion}</a>`)
-			MA.byIdHTML('update_status', this.#versionStatusHTML(this.mod.modDesc.version, result.version))
+			MA.byIdHTML('update_status', this.#versionStatusHTML(this.mod.modDesc.version, result.version, hasRollbackBackup))
+			this.#refreshDownloadButton(result, updatePointer)
+			this.#refreshRollbackButton(updatePointer, hasRollbackBackup)
+			this.#refreshRollbackVersions(updatePointer, hasRollbackBackup)
 		}).catch(() => {
 			MA.byIdHTML('github_version', `<em>${I18N.defer('update_status_failed', false )}</em>`)
 			MA.byIdHTML('update_status', `<span class="text-warning">${I18N.defer('update_status_unknown', false)}</span>`)
+			MA.byId('download_latest_update')?.clsHide()
+			MA.byId('rollback_latest_update')?.clsHide()
+			MA.byId('rollback_versions')?.clsHide()
 		})
 	}
 
-	#versionStatusHTML(localVersion, remoteVersion) {
+	#updatePointer(fileName = null, sourceURL = null) {
+		return {
+			collectionKey : this.mod.currentCollection,
+			fileName      : fileName,
+			modName       : this.mod.fileDetail.shortName,
+			sourceURL     : sourceURL,
+		}
+	}
+
+	#refreshDownloadButton(result, updatePointer) {
+		const downloadButton = MA.byId('download_latest_update')
+		if ( downloadButton === null ) { return }
+
+		const compareResult = DATA.versionCompare(this.mod.modDesc.version, result.version)
+		const isUpdate = compareResult < 0 || (Number.isNaN(compareResult) && DATA.versionDifferent(this.mod.modDesc.version, result.version))
+		const canDownload = isUpdate && result.hasDownload && typeof result.downloadURL === 'string' && typeof result.assetName === 'string'
+
+		downloadButton.clsShow(canDownload)
+		downloadButton.disabled = !canDownload
+		downloadButton.onclick = null
+		if ( !canDownload ) { return }
+
+		downloadButton.onclick = async () => {
+			downloadButton.disabled = true
+			MA.byIdHTML('update_status', I18N.defer('update_list_updating', false))
+			const collectionName = await window.detail_IPC.collectName(updatePointer.collectionKey)
+			const resultDownload = await window.detail_IPC.downloadApplySelected([{
+				collectionKey  : updatePointer.collectionKey,
+				collectionName : collectionName,
+				fileName       : result.assetName,
+				modName         : updatePointer.modName,
+				sourceURL       : updatePointer.sourceURL,
+				url             : result.downloadURL,
+				version         : result.version,
+			}])
+
+			if ( resultDownload.ok ) {
+				downloadButton.clsHide()
+				MA.byIdHTML('update_status', `<span class="text-success">${I18N.defer('update_status_updated', false)}: ${DATA.escapeSpecial(result.version)}</span>`)
+				this.getMod()
+			} else {
+				downloadButton.disabled = false
+				MA.byIdHTML('update_status', `<span class="text-warning">${I18N.defer('update_list_update_failed', false)} ${DATA.escapeSpecial(resultDownload.error)}</span>`)
+			}
+		}
+	}
+
+	#versionMatchesCurrent(version) {
+		if ( typeof version !== 'string' || version === '' ) { return false }
+		const compareResult = DATA.versionCompare(this.mod.modDesc.version, version)
+		return compareResult === 0 || (Number.isNaN(compareResult) && !DATA.versionDifferent(this.mod.modDesc.version, version))
+	}
+
+	async #refreshRollbackVersions(updatePointer, hasRollbackBackup = false) {
+		const rollbackDiv = MA.byId('rollback_versions')
+		if ( rollbackDiv === null ) { return }
+
+		const entries = await window.detail_IPC.rollbackEntries(updatePointer)
+		if ( entries.length === 0 ) {
+			rollbackDiv.clsHide()
+			rollbackDiv.innerHTML = ''
+			return
+		}
+
+		MA.byId('rollback_latest_update')?.clsHide()
+		rollbackDiv.clsShow()
+		rollbackDiv.innerHTML = `
+			<div class="border rounded p-2">
+				<div class="fw-bold mb-2">Available rollback versions</div>
+				<div class="d-grid gap-2" id="rollback_version_list"></div>
+			</div>`
+
+		const listDiv = MA.byId('rollback_version_list')
+		for ( const [index, entry] of entries.entries() ) {
+			const versionLabel = entry.previousVersion ?? entry.currentVersion ?? (entry.backupHash !== null ? entry.backupHash.slice(0, 12) : 'backup')
+			const isCurrentVersion = this.#versionMatchesCurrent(entry.previousVersion ?? entry.currentVersion)
+			const timestamp = entry.timestamp === null ?
+				'Unknown date' :
+				new Date(Date.parse(entry.timestamp)).toLocaleString(this.locale, { timeZoneName : 'short' })
+			const sourceLabel = entry.source ?? 'Backup'
+			const template = document.createElement('template')
+			template.innerHTML = `
+				<div class="bg-secondary bg-opacity-25 rounded p-2">
+					<div class="d-flex flex-wrap justify-content-between gap-2">
+						<div>
+							<div class="fw-bold">Version ${DATA.escapeSpecial(versionLabel)}</div>
+							<div class="small">${DATA.escapeSpecial(timestamp)}</div>
+							<div class="small">${DATA.escapeSpecial(sourceLabel)}</div>
+						</div>
+						<button class="btn btn-sm ${isCurrentVersion ? 'btn-secondary' : 'btn-info'} rollback-version-button" type="button" data-index="${index}" ${isCurrentVersion ? 'disabled' : ''}>${isCurrentVersion ? 'Current version' : 'Restore this version'}</button>
+					</div>
+				</div>
+			`
+			const row = template.content.firstElementChild
+			if ( isCurrentVersion ) {
+				listDiv.appendChild(row)
+				continue
+			}
+
+			row.querySelector('.rollback-version-button').addEventListener('click', async (event) => {
+				const button = event.currentTarget
+				button.disabled = true
+				MA.byIdHTML('update_status', I18N.defer('update_status_rollback_applying', false))
+				const result = await window.detail_IPC.rollbackEntry(entry)
+				if ( result.ok ) {
+					MA.byIdHTML('update_status', `<span class="text-success">${I18N.defer('update_status_rollback_restored', false)}</span>`)
+					this.getMod()
+				} else {
+					button.disabled = false
+					MA.byIdHTML('update_status', `<span class="text-warning">${I18N.defer('update_status_rollback_failed', false)} ${DATA.escapeSpecial(result.error)}</span>`)
+				}
+			})
+			listDiv.appendChild(row)
+		}
+
+		if ( !hasRollbackBackup ) { MA.byId('rollback_latest_update')?.clsHide() }
+	}
+
+	#refreshRollbackButton(updatePointer, hasRollbackBackup) {
+		const rollbackButton = MA.byId('rollback_latest_update')
+		if ( rollbackButton === null ) { return }
+
+		rollbackButton.clsShow(hasRollbackBackup)
+		if ( !hasRollbackBackup ) { return }
+
+		rollbackButton.onclick = async () => {
+			rollbackButton.disabled = true
+			MA.byIdHTML('update_status', I18N.defer('update_status_rollback_applying', false))
+			const result = await window.detail_IPC.rollbackLatest(updatePointer)
+			if ( result.ok ) {
+				MA.byIdHTML('update_status', `<span class="text-success">${I18N.defer('update_status_rollback_restored', false)}</span>`)
+				rollbackButton.clsHide()
+				this.getMod()
+			} else {
+				MA.byIdHTML('update_status', `<span class="text-warning">${I18N.defer('update_status_rollback_failed', false)} ${DATA.escapeSpecial(result.error)}</span>`)
+				rollbackButton.disabled = false
+			}
+		}
+	}
+
+	#versionStatusHTML(localVersion, remoteVersion, hasRollbackBackup = false) {
+		if ( hasRollbackBackup ) {
+			return `<span class="text-info">${I18N.defer('update_status_rollback_available', false)}</span>`
+		}
 		const compareResult = DATA.versionCompare(localVersion, remoteVersion)
 		if ( compareResult < 0 ) {
 			return `<span class="text-warning">${I18N.defer('update_status_available', false)}</span>`

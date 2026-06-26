@@ -74,6 +74,9 @@
 							<i18n-text data-key="history_filter_clear"></i18n-text>
 						</button>
 					</div>
+					<div class="col-md-3 d-flex align-items-end">
+						<button class="btn btn-sm btn-outline-danger w-100" id="historyClearLog" type="button">Clear log (testing)</button>
+					</div>
 				</div>
 			</div>
 		</div>
@@ -96,9 +99,13 @@
 			<span class="badge text-bg-secondary"><template-var>collectionName</template-var></span>
 			<span class="badge text-bg-warning"><template-var>source</template-var></span>
 			<template-var>replaceBadge</template-var>
+			<template-var>backupBadge</template-var>
 		</div>
 		<div class="small mt-2 history-path user-select-text"><template-var>stagedPath</template-var></div>
+		<template-var>backupPath</template-var>
+		<template-var>targetPath</template-var>
 		<div class="small mt-1 history-path user-select-text"><template-var>sourceURL</template-var></div>
+		<template-var>rollbackButton</template-var>
 	</li>
 </template>
 

@@ -50,6 +50,7 @@ class StateManager {
 	verList     = {}
 	extSites    = {}
 	updateCheckCache = new Map()
+	rollbackCheckCache = new Map()
 
 	loader = null
 
@@ -117,6 +118,7 @@ class StateManager {
 		this.collections         = {}
 		this.mods                = {}
 		this.orderMap            = { keys : [], keyToNum : {}, max : 0, numToKey : {} }
+		this.rollbackCheckCache.clear()
 
 		this.mapCollectionFiles    = new Map()
 		this.mapCollectionDropdown = new Map()
@@ -691,6 +693,10 @@ class StateManager {
 		const mod = {
 			filters : new Set(thisMod?.displayBadges?.map?.((x) => x.name) || []),
 			node    : document.createElement('tr'),
+			rollbackCheck : {
+				hasRollback : false,
+				isComplete  : false,
+			},
 			scroll  : document.createElement('scroller-item'),
 			search  : {
 				find_author  : DATA.escapeSpecial(thisMod.modDesc.author).toLowerCase(),
@@ -772,8 +778,42 @@ class StateManager {
 			}
 		}
 		this.#refreshModUpdateBadge(thisMod, mod)
+		this.#refreshModRollbackBadge(thisMod, mod)
 
 		return mod
+	}
+
+	#refreshModRollbackBadge(thisMod, modRec) {
+		if ( thisMod.badgeArray.includes('notmod') || thisMod.badgeArray.includes('savegame') ) { return }
+
+		const cacheKey = `${thisMod.currentCollection}::${thisMod.fileDetail.shortName}`
+		if ( !this.rollbackCheckCache.has(cacheKey) ) {
+			this.rollbackCheckCache.set(cacheKey, window.main_IPC.hasRollbackBackup({
+				collectionKey : thisMod.currentCollection,
+				modName       : thisMod.fileDetail.shortName,
+			}).catch((err) => {
+				window.log.warning('rollback-check', thisMod.fileDetail.shortName, err.message)
+				return false
+			}))
+		}
+
+		this.rollbackCheckCache.get(cacheKey).then((hasRollback) => {
+			const hadRollback = modRec.filters.has('rollback_available')
+
+			modRec.rollbackCheck.hasRollback = hasRollback
+			modRec.rollbackCheck.isComplete  = true
+
+			if ( hasRollback ) {
+				modRec.filters.add('rollback_available')
+				this.searchTagList.add('rollback_available')
+			} else {
+				modRec.filters.delete('rollback_available')
+			}
+
+			this.#applyModRollbackBadge(modRec)
+
+			if ( hadRollback !== hasRollback ) { this.doDisplay() }
+		})
 	}
 
 	#refreshModUpdateBadge(thisMod, modRec) {
@@ -826,11 +866,31 @@ class StateManager {
 		badgeContain.appendChild(this.#buildGitHubUpdateBadge())
 	}
 
+	#applyModRollbackBadge(modRec) {
+		const badgeContain = modRec.node.querySelector('.issue_badges')
+		if ( badgeContain === null ) { return }
+
+		const oldBadge = badgeContain.querySelector('.badge-mod-rollback_available')
+		if ( oldBadge !== null ) { oldBadge.remove() }
+
+		if ( !modRec.rollbackCheck.hasRollback ) { return }
+
+		badgeContain.appendChild(this.#buildRollbackBadge())
+	}
+
 	#buildGitHubUpdateBadge() {
 		const badgeNode = document.createElement('span')
 		badgeNode.classList.add('badge', 'border', 'border-2', 'text-bg-warning', 'border-warning', 'badge-mod-github_update')
 		badgeNode.title = 'A newer version may be available from the saved GitHub source'
 		badgeNode.textContent = 'update'
+		return badgeNode
+	}
+
+	#buildRollbackBadge() {
+		const badgeNode = document.createElement('span')
+		badgeNode.classList.add('badge', 'border', 'border-2', 'text-bg-info', 'border-info', 'badge-mod-rollback_available')
+		badgeNode.title = 'A backup is available for rollback'
+		badgeNode.textContent = 'rollback'
 		return badgeNode
 	}
 
@@ -1037,6 +1097,8 @@ class StateManager {
 			tagNodeTag.classList.add('col-3', 'text-center', 'py-1')
 			if ( tag === 'github_update' ) {
 				tagNodeTag.appendChild(this.#buildGitHubUpdateBadge())
+			} else if ( tag === 'rollback_available' ) {
+				tagNodeTag.appendChild(this.#buildRollbackBadge())
 			} else {
 				tagNodeTag.appendChild(I18N.buildBadgeMod({name : tag, class : []}))
 			}

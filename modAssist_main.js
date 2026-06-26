@@ -17,6 +17,7 @@ if ( !gotTheLock ) { app.quit() }
 const { serveIPC }     = require('./lib/modUtilLib.js')
 const { funcLib }      = require('./lib/modAssist_func_lib.js')
 const { EventEmitter } = require('node:events')
+const crypto           = require('node:crypto')
 const path             = require('node:path')
 const fs               = require('node:fs')
 const fsPromise        = require('node:fs/promises')
@@ -77,6 +78,7 @@ serveIPC.storeCache       = new (require('./lib/modUtilLib.js')).modCacheManager
 serveIPC.storeSites       = new Store({name : 'mod_source_site', migrations : settingDefault.migrateSite, clearInvalidConfig : true})
 serveIPC.storeNote        = new Store({name : 'col_notes', clearInvalidConfig : true})
 serveIPC.storeHistory     = new Store({name : 'collection_history', clearInvalidConfig : true})
+serveIPC.storeLibrary     = new Store({name : 'mod_library', clearInvalidConfig : true})
 
 serveIPC.windowLib.loadSettings()
 
@@ -622,6 +624,7 @@ ipcMain.handle('gamelog:getFile', () => funcLib.prefs.gameLogFile())
 ipcMain.on('gamelog:folder',   () => shell.showItemInFolder(funcLib.prefs.gameLogFile()) )
 ipcMain.on('dispatch:gamelog', () => { serveIPC.windowLib.createNamedWindow('gamelog') })
 ipcMain.on('dispatch:history', () => { serveIPC.windowLib.createNamedWindow('history') })
+ipcMain.on('dispatch:vault', () => { serveIPC.windowLib.createNamedWindow('vault') })
 
 
 // MARK : mini window
@@ -906,7 +909,176 @@ function isGitHubPrereleaseTag(tagName) {
 	return /(?:^|[.-])(?:alpha|beta|dev|preview|pre|rc)(?:[.-]|\d|$)/i.test(tagName)
 }
 
-async function downloadGitHubUpdateZip(download, downloadFolder) {
+function backupFileName(fileName) {
+	const parsed = path.parse(safeDownloadFileName(fileName))
+	const date = new Date().toISOString().replace(/[.:]/g, '-')
+	return `${parsed.name}-${date}${parsed.ext}`
+}
+
+function uniqueCleanArray(values) {
+	return [...new Set(values.filter((value) => typeof value === 'string' && value !== ''))]
+}
+
+async function sha256File(filePath) {
+	return new Promise((resolve, reject) => {
+		const hash = crypto.createHash('sha256')
+		const stream = fs.createReadStream(filePath)
+		stream.on('error', reject)
+		stream.on('data', (chunk) => { hash.update(chunk) })
+		stream.on('end', () => { resolve(hash.digest('hex')) })
+	})
+}
+
+function modLibraryFilePath(hash, fileName) {
+	const ext = path.extname(safeDownloadFileName(fileName)) || '.zip'
+	return path.join(app.getPath('userData'), 'mod-library', 'files', hash.slice(0, 2), `${hash}${ext}`)
+}
+
+async function registerModLibraryFile(filePath, metadata = {}) {
+	if ( typeof filePath !== 'string' || !fs.existsSync(filePath) ) {
+		throw new Error('Library source file was not found')
+	}
+
+	const hash = await sha256File(filePath)
+	const fileName = safeDownloadFileName(metadata.fileName ?? path.basename(filePath))
+	const libraryPath = modLibraryFilePath(hash, fileName)
+	const fileStat = await fsPromise.stat(filePath)
+
+	await fsPromise.mkdir(path.dirname(libraryPath), { recursive : true })
+	if ( !fs.existsSync(libraryPath) ) {
+		await fsPromise.copyFile(filePath, libraryPath)
+	}
+
+	const records = serveIPC.storeLibrary.get('records', {})
+	const existingRecord = records[hash] ?? {
+		collections : [],
+		createdAt   : new Date().toISOString(),
+		fileName    : fileName,
+		filePath    : libraryPath,
+		hash        : hash,
+		modNames    : [],
+		size        : fileStat.size,
+		sources     : [],
+		versions    : [],
+	}
+
+	records[hash] = {
+		...existingRecord,
+		collections : uniqueCleanArray([...(existingRecord.collections ?? []), metadata.collectionName]),
+		fileName    : existingRecord.fileName ?? fileName,
+		filePath    : libraryPath,
+		modNames    : uniqueCleanArray([...(existingRecord.modNames ?? []), metadata.modName]),
+		size        : fileStat.size,
+		sources     : uniqueCleanArray([...(existingRecord.sources ?? []), metadata.source]),
+		sourceURL   : metadata.sourceURL ?? existingRecord.sourceURL ?? null,
+		updatedAt   : new Date().toISOString(),
+		versions    : uniqueCleanArray([...(existingRecord.versions ?? []), metadata.version]),
+	}
+
+	serveIPC.storeLibrary.set('records', records)
+
+	return {
+		fileName,
+		hash,
+		libraryPath,
+		size : fileStat.size,
+	}
+}
+
+function findCachedModLibraryFile(metadata = {}) {
+	if ( typeof metadata.modName !== 'string' || typeof metadata.version !== 'string' ) { return null }
+
+	const records = serveIPC.storeLibrary.get('records', {})
+	return Object.values(records).find((record) => {
+		if ( typeof record?.filePath !== 'string' || !fs.existsSync(record.filePath) ) { return false }
+		if ( !Array.isArray(record.modNames) || !record.modNames.includes(metadata.modName) ) { return false }
+		if ( !Array.isArray(record.versions) || !record.versions.includes(metadata.version) ) { return false }
+		if ( typeof metadata.sourceURL === 'string' && metadata.sourceURL !== '' && typeof record.sourceURL === 'string' ) {
+			return record.sourceURL === metadata.sourceURL
+		}
+		return true
+	}) ?? null
+}
+
+function getModLibrarySummary() {
+	const records = serveIPC.storeLibrary.get('records', {})
+	const historyEntries = serveIPC.storeHistory.get('entries', [])
+	const usedHashes = new Set(historyEntries.flatMap((entry) => [entry.backupHash, entry.currentHash]).filter((value) => typeof value === 'string'))
+	const usedPaths = new Set(historyEntries.flatMap((entry) => [entry.backupPath, entry.currentLibraryPath]).filter((value) => typeof value === 'string'))
+	const entries = Object.values(records)
+		.map((record) => {
+			const fileExists = typeof record?.filePath === 'string' && fs.existsSync(record.filePath)
+			const size = fileExists ? fs.statSync(record.filePath).size : (record.size ?? 0)
+			return {
+				collections  : Array.isArray(record.collections) ? record.collections : [],
+				createdAt    : record.createdAt ?? null,
+				fileExists   : fileExists,
+				fileName     : record.fileName ?? path.basename(record.filePath ?? ''),
+				filePath     : record.filePath ?? null,
+				hash         : record.hash ?? null,
+				isUsed       : usedHashes.has(record.hash) || usedPaths.has(record.filePath),
+				modNames     : Array.isArray(record.modNames) ? record.modNames : [],
+				size         : size,
+				sources      : Array.isArray(record.sources) ? record.sources : [],
+				sourceURL    : record.sourceURL ?? null,
+				updatedAt    : record.updatedAt ?? null,
+				versions     : Array.isArray(record.versions) ? record.versions : [],
+			}
+		})
+		.sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''))
+
+	return {
+		entries,
+		folder     : path.join(app.getPath('userData'), 'mod-library'),
+		totalCount : entries.length,
+		totalSize  : entries.reduce((sum, entry) => sum + entry.size, 0),
+		usedCount  : entries.filter((entry) => entry.isUsed).length,
+	}
+}
+
+async function backupModToLibrary(filePath, metadata = {}) {
+	if ( !fs.existsSync(filePath) ) {
+		return {
+			backupHash : null,
+			backupPath : null,
+			didBackup  : false,
+		}
+	}
+
+	const libraryRecord = await registerModLibraryFile(filePath, {
+		collectionName : metadata.collectionName,
+		fileName       : metadata.fileName ?? path.basename(filePath),
+		modName        : metadata.modName,
+		source         : metadata.source ?? 'Collection',
+		sourceURL      : metadata.sourceURL ?? null,
+		version        : metadata.version,
+	})
+
+	return {
+		backupHash : libraryRecord.hash,
+		backupPath : libraryRecord.libraryPath,
+		didBackup  : true,
+	}
+}
+
+async function backupExistingUpdateZip(filePath, fileName, backupFolder) {
+	if ( !fs.existsSync(filePath) ) {
+		return {
+			backupPath : null,
+			didBackup : false,
+		}
+	}
+
+	await fsPromise.mkdir(backupFolder, { recursive : true })
+	const backupPath = path.join(backupFolder, backupFileName(fileName))
+	await fsPromise.copyFile(filePath, backupPath)
+	return {
+		backupPath,
+		didBackup : true,
+	}
+}
+
+async function downloadGitHubUpdateZip(download, downloadFolder, backupFolder) {
 	if ( typeof download?.url !== 'string' || typeof download?.fileName !== 'string' ) {
 		throw new Error('Invalid download candidate')
 	}
@@ -918,44 +1090,330 @@ async function downloadGitHubUpdateZip(download, downloadFolder) {
 	const fileName = safeDownloadFileName(download.fileName)
 	const filePath = path.join(downloadFolder, fileName)
 	const replacedExisting = fs.existsSync(filePath)
+	const tempPath = path.join(downloadFolder, `.${fileName}.${Date.now()}.download`)
 
-	await new Promise((resolve, reject) => {
-		const request = net.request(download.url)
-		request.on('response', (response) => {
-			if ( response.statusCode < 200 || response.statusCode >= 400 ) {
-				reject(new Error(`Download failed with status ${response.statusCode}`))
-				return
-			}
+	try {
+		await new Promise((resolve, reject) => {
+			const request = net.request(download.url)
+			request.on('response', (response) => {
+				if ( response.statusCode < 200 || response.statusCode >= 400 ) {
+					reject(new Error(`Download failed with status ${response.statusCode}`))
+					return
+				}
 
-			const writeStream = fs.createWriteStream(filePath)
-			response.pipe(writeStream)
-			response.on('error', reject)
-			writeStream.on('error', reject)
-			writeStream.on('finish', () => {
-				writeStream.close(resolve)
+				const writeStream = fs.createWriteStream(tempPath)
+				response.pipe(writeStream)
+				response.on('error', reject)
+				writeStream.on('error', reject)
+				writeStream.on('finish', () => {
+					writeStream.close(resolve)
+				})
 			})
+			request.on('error', reject)
+			request.end()
 		})
-		request.on('error', reject)
-		request.end()
-	})
+
+		const backupResult = await backupExistingUpdateZip(filePath, fileName, backupFolder)
+		await fsPromise.rm(filePath, { force : true })
+		await fsPromise.rename(tempPath, filePath)
+
+		return {
+			backupPath : backupResult.backupPath,
+			filePath,
+			replacedExisting,
+		}
+	} catch (err) {
+		await fsPromise.rm(tempPath, { force : true }).catch(() => {})
+		throw err
+	}
+}
+
+async function downloadGitHubZipToPath(download, filePath) {
+	if ( typeof download?.url !== 'string' || typeof download?.fileName !== 'string' ) {
+		throw new Error('Invalid download candidate')
+	}
+
+	const url = new URL(download.url)
+	if ( url.protocol !== 'https:' ) { throw new Error('Only HTTPS downloads are allowed') }
+	if ( !download.fileName.toLowerCase().endsWith('.zip') ) { throw new Error('Only ZIP downloads are allowed') }
+
+	await fsPromise.mkdir(path.dirname(filePath), { recursive : true })
+	const tempPath = path.join(path.dirname(filePath), `.${path.basename(filePath)}.${Date.now()}.download`)
+
+	try {
+		await new Promise((resolve, reject) => {
+			const request = net.request(download.url)
+			request.on('response', (response) => {
+				if ( response.statusCode < 200 || response.statusCode >= 400 ) {
+					reject(new Error(`Download failed with status ${response.statusCode}`))
+					return
+				}
+
+				const writeStream = fs.createWriteStream(tempPath)
+				response.pipe(writeStream)
+				response.on('error', reject)
+				writeStream.on('error', reject)
+				writeStream.on('finish', () => {
+					writeStream.close(resolve)
+				})
+			})
+			request.on('error', reject)
+			request.end()
+		})
+
+		await fsPromise.rm(filePath, { force : true })
+		await fsPromise.rename(tempPath, filePath)
+		return filePath
+	} catch (err) {
+		await fsPromise.rm(tempPath, { force : true }).catch(() => {})
+		throw err
+	}
+}
+
+function getCollectionModRecord(collectionKey, modName) {
+	const collection = serveIPC.modCollect.allModList?.[collectionKey]
+	if ( typeof collection?.mods !== 'object' ) { return null }
+	return Object.values(collection.mods).find((mod) => mod?.fileDetail?.shortName === modName) ?? null
+}
+
+async function applyStagedUpdate(update, downloadFolder, backupFolder) {
+	if ( typeof update?.collectionKey !== 'string' || typeof update?.fileName !== 'string' || typeof update?.modName !== 'string' ) {
+		throw new Error('Invalid staged update')
+	}
+
+	const collectionName = serveIPC.modCollect.mapCollectionToName(update.collectionKey) ?? update.collectionName ?? update.collectionKey
+	const stagedPath = path.join(downloadFolder, safeDownloadFolderName(collectionName), safeDownloadFileName(update.fileName))
+
+	if ( !fs.existsSync(stagedPath) ) { throw new Error(`Staged ZIP not found: ${path.basename(stagedPath)}`) }
+
+	const modRecord = getCollectionModRecord(update.collectionKey, update.modName)
+	if ( modRecord === null ) { throw new Error(`Mod not found in collection: ${update.modName}`) }
+	if ( modRecord.fileDetail.isFolder ) { throw new Error(`Folder mods cannot be replaced yet: ${update.modName}`) }
+
+	const collectionFolder = serveIPC.modCollect.mapCollectionToFolder(update.collectionKey)
+	const targetPath = path.join(collectionFolder, path.basename(modRecord.fileDetail.fullPath))
+	const collectionBackupFolder = path.join(backupFolder, safeDownloadFolderName(collectionName))
+	const backupResult = await backupExistingUpdateZip(targetPath, path.basename(targetPath), collectionBackupFolder)
+
+	await fsPromise.copyFile(stagedPath, targetPath)
+	await fsPromise.rm(stagedPath, { force : true })
 
 	return {
-		filePath,
-		replacedExisting,
+		backupPath : backupResult.backupPath,
+		collectionName,
+		stagedPath,
+		targetPath,
 	}
+}
+
+async function downloadAndApplyUpdate(download) {
+	if (
+		typeof download?.collectionKey !== 'string' ||
+		typeof download?.fileName !== 'string' ||
+		typeof download?.modName !== 'string' ||
+		typeof download?.url !== 'string'
+	) {
+		throw new Error('Invalid update candidate')
+	}
+
+	const modRecord = getCollectionModRecord(download.collectionKey, download.modName)
+	if ( modRecord === null ) { throw new Error(`Mod not found in collection: ${download.modName}`) }
+	if ( modRecord.fileDetail.isFolder ) { throw new Error(`Folder mods cannot be replaced yet: ${download.modName}`) }
+
+	const collectionName = serveIPC.modCollect.mapCollectionToName(download.collectionKey) ?? download.collectionName ?? download.collectionKey
+	const collectionFolder = serveIPC.modCollect.mapCollectionToFolder(download.collectionKey)
+	const targetPath = path.join(collectionFolder, path.basename(modRecord.fileDetail.fullPath))
+	const tempFolder = path.join(app.getPath('temp'), 'fsg-mod-assistant-update-downloads', safeDownloadFolderName(collectionName))
+	const tempPath = path.join(tempFolder, `${Date.now()}-${safeDownloadFileName(download.fileName)}`)
+
+	try {
+		const cachedLibrary = findCachedModLibraryFile({
+			modName   : download.modName,
+			sourceURL : download.sourceURL ?? null,
+			version   : download.version,
+		})
+		const downloadLibrary = cachedLibrary === null ?
+			await downloadGitHubZipToPath(download, tempPath).then(() => registerModLibraryFile(tempPath, {
+				collectionName,
+				fileName  : download.fileName,
+				modName   : download.modName,
+				source    : 'GitHub',
+				sourceURL : download.sourceURL ?? null,
+				version   : download.version,
+			})) :
+			cachedLibrary
+		const backupResult = await backupModToLibrary(targetPath, {
+			collectionName,
+			fileName  : path.basename(targetPath),
+			modName   : download.modName,
+			source    : 'Collection',
+			sourceURL : download.sourceURL ?? null,
+			version   : modRecord.modDesc.version,
+		})
+		await fsPromise.copyFile(downloadLibrary.libraryPath ?? downloadLibrary.filePath, targetPath)
+
+		return {
+			backupHash : backupResult.backupHash,
+			backupPath : backupResult.backupPath,
+			collectionName,
+			currentHash : downloadLibrary.hash,
+			currentLibraryPath : downloadLibrary.libraryPath ?? downloadLibrary.filePath,
+			previousVersion : modRecord.modDesc.version,
+			targetPath,
+			tempPath,
+			usedCache : cachedLibrary !== null,
+		}
+	} finally {
+		await fsPromise.rm(tempPath, { force : true }).catch(() => {})
+	}
+}
+
+function hasRollbackBackup(update) {
+	return getLatestRollbackEntry(update) !== null
+}
+
+function getLatestRollbackEntry(update) {
+	if ( typeof update?.collectionKey !== 'string' || typeof update?.modName !== 'string' ) { return null }
+
+	const collectionName = typeof update.collectionName === 'string' ?
+		update.collectionName :
+		serveIPC.modCollect.mapCollectionToName(update.collectionKey)
+	const historyEntries = serveIPC.storeHistory.get('entries', [])
+
+	return historyEntries.find((entry) => {
+		if ( entry?.action !== 'update_applied' ) { return false }
+		if ( entry?.collectionName !== collectionName ) { return false }
+		if ( entry?.modName !== update.modName ) { return false }
+		if ( typeof entry?.backupPath !== 'string' ) { return false }
+		return fs.existsSync(entry.backupPath)
+	}) ?? null
+}
+
+function getRollbackEntries(update) {
+	if ( typeof update?.collectionKey !== 'string' || typeof update?.modName !== 'string' ) { return [] }
+
+	const collectionName = typeof update.collectionName === 'string' ?
+		update.collectionName :
+		serveIPC.modCollect.mapCollectionToName(update.collectionKey)
+	const historyEntries = serveIPC.storeHistory.get('entries', [])
+	const seenBackups = new Set()
+
+	const rollbackEntries = historyEntries
+		.filter((entry) => {
+			if ( entry?.action !== 'update_applied' ) { return false }
+			if ( entry?.collectionName !== collectionName ) { return false }
+			if ( entry?.modName !== update.modName ) { return false }
+			if ( typeof entry?.backupPath !== 'string' ) { return false }
+			if ( !fs.existsSync(entry.backupPath) ) { return false }
+			const backupKey = entry.backupHash ?? entry.backupPath
+			if ( seenBackups.has(backupKey) ) { return false }
+			seenBackups.add(backupKey)
+			return true
+		})
+		.map((entry) => ({
+			action           : entry.action ?? 'unknown',
+			backupHash       : entry.backupHash ?? null,
+			backupPath       : entry.backupPath,
+			collectionName   : entry.collectionName ?? collectionName,
+			currentVersion   : entry.currentVersion ?? null,
+			fileName         : entry.fileName ?? update.fileName ?? null,
+			modName          : entry.modName ?? update.modName,
+			previousVersion  : entry.previousVersion ?? null,
+			source           : entry.source ?? null,
+			sourceURL        : entry.sourceURL ?? null,
+			targetPath       : entry.targetPath ?? null,
+			timestamp        : entry.timestamp ?? null,
+		}))
+
+	return rollbackEntries.some((entry) => entry.previousVersion !== null || entry.currentVersion !== null) ?
+		rollbackEntries.filter((entry) => entry.previousVersion !== null || entry.currentVersion !== null) :
+		rollbackEntries
+}
+
+async function rollbackLatestUpdate(update) {
+	const rollbackEntry = getLatestRollbackEntry(update)
+	if ( rollbackEntry === null ) { throw new Error(`No rollback backup found for: ${update?.modName ?? 'unknown mod'}`) }
+	if ( typeof rollbackEntry.targetPath !== 'string' ) { throw new Error(`Rollback target is missing for: ${update.modName}`) }
+	if ( !fs.existsSync(rollbackEntry.targetPath) ) { throw new Error(`Current mod ZIP not found: ${path.basename(rollbackEntry.targetPath)}`) }
+
+	const currentBackup = await backupModToLibrary(rollbackEntry.targetPath, {
+		collectionName : rollbackEntry.collectionName,
+		fileName       : path.basename(rollbackEntry.targetPath),
+		modName        : rollbackEntry.modName,
+		source         : 'Rollback current',
+		sourceURL      : rollbackEntry.sourceURL ?? null,
+		version        : rollbackEntry.currentVersion ?? null,
+	})
+	await fsPromise.copyFile(rollbackEntry.backupPath, rollbackEntry.targetPath)
+
+	return {
+		backupHash     : currentBackup.backupHash,
+		backupPath     : currentBackup.backupPath,
+		collectionName : rollbackEntry.collectionName,
+		rollbackHash   : rollbackEntry.backupHash ?? null,
+		rollbackPath   : rollbackEntry.backupPath,
+		targetPath     : rollbackEntry.targetPath,
+	}
+}
+
+async function rollbackHistoryEntry(entry) {
+	if ( typeof entry?.backupPath !== 'string' || !fs.existsSync(entry.backupPath) ) {
+		throw new Error('Rollback backup file was not found')
+	}
+	if ( typeof entry?.targetPath !== 'string' || !fs.existsSync(entry.targetPath) ) {
+		throw new Error('Current mod ZIP was not found')
+	}
+
+	const collectionName = entry.collectionName ?? 'updates'
+	const currentBackup = await backupModToLibrary(entry.targetPath, {
+		collectionName,
+		fileName  : path.basename(entry.targetPath),
+		modName   : entry.modName ?? path.basename(entry.targetPath, '.zip'),
+		source    : 'Rollback current',
+		sourceURL : entry.sourceURL ?? null,
+		version   : entry.currentVersion ?? null,
+	})
+	await fsPromise.copyFile(entry.backupPath, entry.targetPath)
+
+	return {
+		backupHash     : currentBackup.backupHash,
+		backupPath     : currentBackup.backupPath,
+		collectionName : collectionName,
+		fileName       : entry.fileName ?? path.basename(entry.targetPath),
+		modName        : entry.modName ?? path.basename(entry.targetPath, '.zip'),
+		rollbackHash   : entry.backupHash ?? null,
+		rollbackPath   : entry.backupPath,
+		sourceURL      : entry.sourceURL ?? null,
+		targetPath     : entry.targetPath,
+	}
+}
+
+function processModFoldersAndWait() {
+	return new Promise((resolve) => {
+		modQueueRunner.once('process-mods-done', () => { resolve() })
+		processModFolders(true)
+	})
 }
 
 function addCollectionHistoryEntry(entry) {
 	const historyEntries = serveIPC.storeHistory.get('entries', [])
 	const cleanEntry = {
 		action           : entry.action ?? 'unknown',
+		backupHash       : entry.backupHash ?? null,
+		backupPath       : entry.backupPath ?? null,
 		collectionName   : entry.collectionName ?? null,
+		currentHash      : entry.currentHash ?? null,
+		currentLibraryPath : entry.currentLibraryPath ?? null,
+		currentVersion   : entry.currentVersion ?? null,
 		fileName         : entry.fileName ?? null,
 		modName          : entry.modName ?? null,
+		previousVersion  : entry.previousVersion ?? null,
 		replacedExisting : entry.replacedExisting ?? false,
+		rollbackHash     : entry.rollbackHash ?? null,
 		source           : entry.source ?? null,
 		sourceURL        : entry.sourceURL ?? null,
 		stagedPath       : entry.stagedPath ?? null,
+		targetPath       : entry.targetPath ?? null,
 		timestamp        : new Date().toISOString(),
 	}
 
@@ -1120,6 +1578,144 @@ ipcMain.handle('update:list', () => serveIPC.modCollect.toRenderer({
 	modSites         : serveIPC.storeSites.store,
 }))
 ipcMain.handle('history:all', () => serveIPC.storeHistory.get('entries', []))
+ipcMain.handle('history:clear', () => {
+	serveIPC.storeHistory.set('entries', [])
+	return { ok : true }
+})
+ipcMain.handle('vault:all', () => getModLibrarySummary())
+ipcMain.handle('vault:openFolder', () => shell.openPath(path.join(app.getPath('userData'), 'mod-library')))
+ipcMain.handle('history:rollbackEntry', async (_, entry) => {
+	try {
+		const backupFolder = path.join(app.getPath('userData'), 'update-backups')
+		await fsPromise.mkdir(backupFolder, { recursive : true })
+
+		const rollbackResult = await rollbackHistoryEntry(entry)
+		addCollectionHistoryEntry({
+			action           : 'update_rolled_back',
+			backupHash       : rollbackResult.backupHash,
+			backupPath       : rollbackResult.backupPath,
+			collectionName   : rollbackResult.collectionName,
+			fileName         : rollbackResult.fileName,
+			modName          : rollbackResult.modName,
+			replacedExisting : rollbackResult.backupPath !== null,
+			rollbackHash     : rollbackResult.rollbackHash,
+			source           : 'Rollback',
+			sourceURL        : rollbackResult.sourceURL,
+			stagedPath       : rollbackResult.rollbackPath,
+			targetPath       : rollbackResult.targetPath,
+		})
+
+		funcLib.general.toggleFolderDirty()
+		await processModFoldersAndWait()
+		return { ok : true }
+	} catch (err) {
+		return { ok : false, error : err.message }
+	}
+})
+ipcMain.handle('update:isStaged', (_, update) => {
+	if ( typeof update?.fileName !== 'string' ) { return false }
+	const collectionName = typeof update?.collectionName === 'string' ?
+		update.collectionName :
+		serveIPC.modCollect.mapCollectionToName(update?.collectionKey)
+	if ( typeof collectionName !== 'string' ) { return false }
+	const stagedPath = path.join(
+		app.getPath('userData'),
+		'update-downloads',
+		safeDownloadFolderName(collectionName),
+		safeDownloadFileName(update.fileName)
+	)
+	return fs.existsSync(stagedPath)
+})
+ipcMain.handle('update:hasRollbackBackup', (_, update) => hasRollbackBackup(update))
+ipcMain.handle('update:rollbackEntries', (_, update) => getRollbackEntries(update))
+ipcMain.handle('update:rollbackEntry', async (_, entry) => {
+	try {
+		const rollbackResult = await rollbackHistoryEntry(entry)
+		addCollectionHistoryEntry({
+			action           : 'update_rolled_back',
+			backupHash       : rollbackResult.backupHash,
+			backupPath       : rollbackResult.backupPath,
+			collectionName   : rollbackResult.collectionName,
+			fileName         : rollbackResult.fileName,
+			modName          : rollbackResult.modName,
+			replacedExisting : rollbackResult.backupPath !== null,
+			rollbackHash     : rollbackResult.rollbackHash,
+			source           : 'Rollback',
+			sourceURL        : rollbackResult.sourceURL,
+			stagedPath       : rollbackResult.rollbackPath,
+			targetPath       : rollbackResult.targetPath,
+		})
+
+		funcLib.general.toggleFolderDirty()
+		await processModFoldersAndWait()
+		return { ok : true }
+	} catch (err) {
+		return { ok : false, error : err.message }
+	}
+})
+ipcMain.handle('update:rollbackLatest', async (_, update) => {
+	try {
+		const backupFolder = path.join(app.getPath('userData'), 'update-backups')
+		await fsPromise.mkdir(backupFolder, { recursive : true })
+
+		const rollbackResult = await rollbackLatestUpdate(update)
+		addCollectionHistoryEntry({
+			action           : 'update_rolled_back',
+			backupHash       : rollbackResult.backupHash,
+			backupPath       : rollbackResult.backupPath,
+			collectionName   : rollbackResult.collectionName,
+			fileName         : update.fileName ?? null,
+			modName          : update.modName,
+			replacedExisting : rollbackResult.backupPath !== null,
+			rollbackHash     : rollbackResult.rollbackHash,
+			source           : 'Rollback',
+			sourceURL        : update.sourceURL ?? null,
+			stagedPath       : rollbackResult.rollbackPath,
+			targetPath       : rollbackResult.targetPath,
+		})
+
+		funcLib.general.toggleFolderDirty()
+		await processModFoldersAndWait()
+		return { ok : true }
+	} catch (err) {
+		return { ok : false, error : err.message }
+	}
+})
+ipcMain.handle('update:applySelected', async (_, updates) => {
+	try {
+		if ( !Array.isArray(updates) || updates.length === 0 ) {
+			return { ok : false, error : 'No staged ZIPs selected' }
+		}
+
+		const backupFolder   = path.join(app.getPath('userData'), 'update-backups')
+		const downloadFolder = path.join(app.getPath('userData'), 'update-downloads')
+		await fsPromise.mkdir(backupFolder, { recursive : true })
+
+		const applyCount = await updates.reduce(async (previousCount, update) => {
+			const count = await previousCount
+			const applyResult = await applyStagedUpdate(update, downloadFolder, backupFolder)
+			addCollectionHistoryEntry({
+				action           : 'update_applied',
+				backupPath       : applyResult.backupPath,
+				collectionName   : applyResult.collectionName,
+				fileName         : update.fileName,
+				modName          : update.modName,
+				replacedExisting : applyResult.backupPath !== null,
+				source           : 'GitHub',
+				sourceURL        : update.sourceURL,
+				stagedPath       : applyResult.stagedPath,
+				targetPath       : applyResult.targetPath,
+			})
+			return count + 1
+		}, Promise.resolve(0))
+
+		funcLib.general.toggleFolderDirty()
+		await processModFoldersAndWait()
+		return { count : applyCount, ok : true }
+	} catch (err) {
+		return { ok : false, error : err.message }
+	}
+})
 ipcMain.handle('update:downloadSelected', async (_, downloads) => {
 	try {
 		if ( !Array.isArray(downloads) || downloads.length === 0 ) {
@@ -1127,15 +1723,19 @@ ipcMain.handle('update:downloadSelected', async (_, downloads) => {
 		}
 
 		const downloadFolder = path.join(app.getPath('userData'), 'update-downloads')
+		const backupFolder   = path.join(app.getPath('userData'), 'update-backups')
 		await fsPromise.mkdir(downloadFolder, { recursive : true })
+		await fsPromise.mkdir(backupFolder, { recursive : true })
 
 		const downloadCount = await downloads.reduce(async (previousCount, download) => {
 			const count = await previousCount
 			const collectionFolder = path.join(downloadFolder, safeDownloadFolderName(download.collectionName))
+			const collectionBackupFolder = path.join(backupFolder, safeDownloadFolderName(download.collectionName))
 			await fsPromise.mkdir(collectionFolder, { recursive : true })
-			const downloadResult = await downloadGitHubUpdateZip(download, collectionFolder)
+			const downloadResult = await downloadGitHubUpdateZip(download, collectionFolder, collectionBackupFolder)
 			addCollectionHistoryEntry({
 				action           : 'update_staged',
+				backupPath       : downloadResult.backupPath,
 				collectionName   : download.collectionName,
 				fileName         : download.fileName,
 				modName          : download.modName,
@@ -1149,6 +1749,45 @@ ipcMain.handle('update:downloadSelected', async (_, downloads) => {
 
 		shell.openPath(downloadFolder)
 		return { count : downloadCount, folder : downloadFolder, ok : true }
+	} catch (err) {
+		return { ok : false, error : err.message }
+	}
+})
+ipcMain.handle('update:downloadApplySelected', async (_, downloads) => {
+	try {
+		if ( !Array.isArray(downloads) || downloads.length === 0 ) {
+			return { ok : false, error : 'No downloadable updates selected' }
+		}
+
+		const backupFolder = path.join(app.getPath('userData'), 'update-backups')
+		await fsPromise.mkdir(backupFolder, { recursive : true })
+
+		const updateCount = await downloads.reduce(async (previousCount, download) => {
+			const count = await previousCount
+			const updateResult = await downloadAndApplyUpdate(download)
+			addCollectionHistoryEntry({
+				action           : 'update_applied',
+				backupHash       : updateResult.backupHash,
+				backupPath       : updateResult.backupPath,
+				collectionName   : updateResult.collectionName,
+				currentHash      : updateResult.currentHash,
+				currentLibraryPath : updateResult.currentLibraryPath,
+				currentVersion   : download.version ?? null,
+				fileName         : download.fileName,
+				modName          : download.modName,
+				previousVersion  : updateResult.previousVersion ?? null,
+				replacedExisting : updateResult.backupPath !== null,
+				source           : updateResult.usedCache ? 'GitHub cache' : 'GitHub',
+				sourceURL        : download.sourceURL,
+				stagedPath       : null,
+				targetPath       : updateResult.targetPath,
+			})
+			return count + 1
+		}, Promise.resolve(0))
+
+		funcLib.general.toggleFolderDirty()
+		await processModFoldersAndWait()
+		return { count : updateCount, ok : true }
 	} catch (err) {
 		return { ok : false, error : err.message }
 	}
