@@ -909,12 +909,6 @@ function isGitHubPrereleaseTag(tagName) {
 	return /(?:^|[.-])(?:alpha|beta|dev|preview|pre|rc)(?:[.-]|\d|$)/i.test(tagName)
 }
 
-function backupFileName(fileName) {
-	const parsed = path.parse(safeDownloadFileName(fileName))
-	const date = new Date().toISOString().replace(/[.:]/g, '-')
-	return `${parsed.name}-${date}${parsed.ext}`
-}
-
 function uniqueCleanArray(values) {
 	return [...new Set(values.filter((value) => typeof value === 'string' && value !== ''))]
 }
@@ -1061,73 +1055,6 @@ async function backupModToLibrary(filePath, metadata = {}) {
 	}
 }
 
-async function backupExistingUpdateZip(filePath, fileName, backupFolder) {
-	if ( !fs.existsSync(filePath) ) {
-		return {
-			backupPath : null,
-			didBackup : false,
-		}
-	}
-
-	await fsPromise.mkdir(backupFolder, { recursive : true })
-	const backupPath = path.join(backupFolder, backupFileName(fileName))
-	await fsPromise.copyFile(filePath, backupPath)
-	return {
-		backupPath,
-		didBackup : true,
-	}
-}
-
-async function downloadGitHubUpdateZip(download, downloadFolder, backupFolder) {
-	if ( typeof download?.url !== 'string' || typeof download?.fileName !== 'string' ) {
-		throw new Error('Invalid download candidate')
-	}
-
-	const url = new URL(download.url)
-	if ( url.protocol !== 'https:' ) { throw new Error('Only HTTPS downloads are allowed') }
-	if ( !download.fileName.toLowerCase().endsWith('.zip') ) { throw new Error('Only ZIP downloads are allowed') }
-
-	const fileName = safeDownloadFileName(download.fileName)
-	const filePath = path.join(downloadFolder, fileName)
-	const replacedExisting = fs.existsSync(filePath)
-	const tempPath = path.join(downloadFolder, `.${fileName}.${Date.now()}.download`)
-
-	try {
-		await new Promise((resolve, reject) => {
-			const request = net.request(download.url)
-			request.on('response', (response) => {
-				if ( response.statusCode < 200 || response.statusCode >= 400 ) {
-					reject(new Error(`Download failed with status ${response.statusCode}`))
-					return
-				}
-
-				const writeStream = fs.createWriteStream(tempPath)
-				response.pipe(writeStream)
-				response.on('error', reject)
-				writeStream.on('error', reject)
-				writeStream.on('finish', () => {
-					writeStream.close(resolve)
-				})
-			})
-			request.on('error', reject)
-			request.end()
-		})
-
-		const backupResult = await backupExistingUpdateZip(filePath, fileName, backupFolder)
-		await fsPromise.rm(filePath, { force : true })
-		await fsPromise.rename(tempPath, filePath)
-
-		return {
-			backupPath : backupResult.backupPath,
-			filePath,
-			replacedExisting,
-		}
-	} catch (err) {
-		await fsPromise.rm(tempPath, { force : true }).catch(() => {})
-		throw err
-	}
-}
-
 async function downloadGitHubZipToPath(download, filePath) {
 	if ( typeof download?.url !== 'string' || typeof download?.fileName !== 'string' ) {
 		throw new Error('Invalid download candidate')
@@ -1174,36 +1101,6 @@ function getCollectionModRecord(collectionKey, modName) {
 	const collection = serveIPC.modCollect.allModList?.[collectionKey]
 	if ( typeof collection?.mods !== 'object' ) { return null }
 	return Object.values(collection.mods).find((mod) => mod?.fileDetail?.shortName === modName) ?? null
-}
-
-async function applyStagedUpdate(update, downloadFolder, backupFolder) {
-	if ( typeof update?.collectionKey !== 'string' || typeof update?.fileName !== 'string' || typeof update?.modName !== 'string' ) {
-		throw new Error('Invalid staged update')
-	}
-
-	const collectionName = serveIPC.modCollect.mapCollectionToName(update.collectionKey) ?? update.collectionName ?? update.collectionKey
-	const stagedPath = path.join(downloadFolder, safeDownloadFolderName(collectionName), safeDownloadFileName(update.fileName))
-
-	if ( !fs.existsSync(stagedPath) ) { throw new Error(`Staged ZIP not found: ${path.basename(stagedPath)}`) }
-
-	const modRecord = getCollectionModRecord(update.collectionKey, update.modName)
-	if ( modRecord === null ) { throw new Error(`Mod not found in collection: ${update.modName}`) }
-	if ( modRecord.fileDetail.isFolder ) { throw new Error(`Folder mods cannot be replaced yet: ${update.modName}`) }
-
-	const collectionFolder = serveIPC.modCollect.mapCollectionToFolder(update.collectionKey)
-	const targetPath = path.join(collectionFolder, path.basename(modRecord.fileDetail.fullPath))
-	const collectionBackupFolder = path.join(backupFolder, safeDownloadFolderName(collectionName))
-	const backupResult = await backupExistingUpdateZip(targetPath, path.basename(targetPath), collectionBackupFolder)
-
-	await fsPromise.copyFile(stagedPath, targetPath)
-	await fsPromise.rm(stagedPath, { force : true })
-
-	return {
-		backupPath : backupResult.backupPath,
-		collectionName,
-		stagedPath,
-		targetPath,
-	}
 }
 
 async function downloadAndApplyUpdate(download) {
@@ -1612,20 +1509,6 @@ ipcMain.handle('history:rollbackEntry', async (_, entry) => {
 		return { ok : false, error : err.message }
 	}
 })
-ipcMain.handle('update:isStaged', (_, update) => {
-	if ( typeof update?.fileName !== 'string' ) { return false }
-	const collectionName = typeof update?.collectionName === 'string' ?
-		update.collectionName :
-		serveIPC.modCollect.mapCollectionToName(update?.collectionKey)
-	if ( typeof collectionName !== 'string' ) { return false }
-	const stagedPath = path.join(
-		app.getPath('userData'),
-		'update-downloads',
-		safeDownloadFolderName(collectionName),
-		safeDownloadFileName(update.fileName)
-	)
-	return fs.existsSync(stagedPath)
-})
 ipcMain.handle('update:hasRollbackBackup', (_, update) => hasRollbackBackup(update))
 ipcMain.handle('update:rollbackEntries', (_, update) => getRollbackEntries(update))
 ipcMain.handle('update:rollbackEntry', async (_, entry) => {
@@ -1677,78 +1560,6 @@ ipcMain.handle('update:rollbackLatest', async (_, update) => {
 		funcLib.general.toggleFolderDirty()
 		await processModFoldersAndWait()
 		return { ok : true }
-	} catch (err) {
-		return { ok : false, error : err.message }
-	}
-})
-ipcMain.handle('update:applySelected', async (_, updates) => {
-	try {
-		if ( !Array.isArray(updates) || updates.length === 0 ) {
-			return { ok : false, error : 'No staged ZIPs selected' }
-		}
-
-		const backupFolder   = path.join(app.getPath('userData'), 'update-backups')
-		const downloadFolder = path.join(app.getPath('userData'), 'update-downloads')
-		await fsPromise.mkdir(backupFolder, { recursive : true })
-
-		const applyCount = await updates.reduce(async (previousCount, update) => {
-			const count = await previousCount
-			const applyResult = await applyStagedUpdate(update, downloadFolder, backupFolder)
-			addCollectionHistoryEntry({
-				action           : 'update_applied',
-				backupPath       : applyResult.backupPath,
-				collectionName   : applyResult.collectionName,
-				fileName         : update.fileName,
-				modName          : update.modName,
-				replacedExisting : applyResult.backupPath !== null,
-				source           : 'GitHub',
-				sourceURL        : update.sourceURL,
-				stagedPath       : applyResult.stagedPath,
-				targetPath       : applyResult.targetPath,
-			})
-			return count + 1
-		}, Promise.resolve(0))
-
-		funcLib.general.toggleFolderDirty()
-		await processModFoldersAndWait()
-		return { count : applyCount, ok : true }
-	} catch (err) {
-		return { ok : false, error : err.message }
-	}
-})
-ipcMain.handle('update:downloadSelected', async (_, downloads) => {
-	try {
-		if ( !Array.isArray(downloads) || downloads.length === 0 ) {
-			return { ok : false, error : 'No downloadable ZIPs selected' }
-		}
-
-		const downloadFolder = path.join(app.getPath('userData'), 'update-downloads')
-		const backupFolder   = path.join(app.getPath('userData'), 'update-backups')
-		await fsPromise.mkdir(downloadFolder, { recursive : true })
-		await fsPromise.mkdir(backupFolder, { recursive : true })
-
-		const downloadCount = await downloads.reduce(async (previousCount, download) => {
-			const count = await previousCount
-			const collectionFolder = path.join(downloadFolder, safeDownloadFolderName(download.collectionName))
-			const collectionBackupFolder = path.join(backupFolder, safeDownloadFolderName(download.collectionName))
-			await fsPromise.mkdir(collectionFolder, { recursive : true })
-			const downloadResult = await downloadGitHubUpdateZip(download, collectionFolder, collectionBackupFolder)
-			addCollectionHistoryEntry({
-				action           : 'update_staged',
-				backupPath       : downloadResult.backupPath,
-				collectionName   : download.collectionName,
-				fileName         : download.fileName,
-				modName          : download.modName,
-				replacedExisting : downloadResult.replacedExisting,
-				source           : 'GitHub',
-				sourceURL        : download.sourceURL,
-				stagedPath       : downloadResult.filePath,
-			})
-			return count + 1
-		}, Promise.resolve(0))
-
-		shell.openPath(downloadFolder)
-		return { count : downloadCount, folder : downloadFolder, ok : true }
 	} catch (err) {
 		return { ok : false, error : err.message }
 	}

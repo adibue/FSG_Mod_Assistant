@@ -19,6 +19,9 @@
 		.vault-path {
 			word-break: break-all;
 		}
+		.vault-group-body {
+			margin-left: 1.75rem;
+		}
 	</style>
 </head>
 <body data-bs-theme="dark" class="overflow-custom2">
@@ -53,6 +56,9 @@
 					</div>
 					<div class="col-md-3 d-flex align-items-end">
 						<button class="btn btn-sm btn-secondary w-100" id="vaultOpenFolder" type="button">Open vault folder</button>
+					</div>
+					<div class="col-md-3 d-flex align-items-end">
+						<button class="btn btn-sm btn-info w-100" id="vaultBackToUpdates" type="button">Back to updates</button>
 					</div>
 					<div class="col-12">
 						<label class="form-label small" for="vaultTextFilter">Search</label>
@@ -110,6 +116,7 @@
 			</button>
 		</div>
 		<div class="collapse mt-2 vault-technical-details">
+			<div class="small vault-path user-select-text">Version labels seen: <template-var>versionLabels</template-var></div>
 			<div class="small vault-path user-select-text">Path: <template-var>filePath</template-var></div>
 			<div class="small vault-path user-select-text">Fingerprint: <template-var>hash</template-var></div>
 		</div>

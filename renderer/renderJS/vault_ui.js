@@ -22,6 +22,55 @@ function normalValue(value) {
 	return (value ?? '').toString().toLowerCase()
 }
 
+function sortTime(entry) {
+	const date = new Date(entry.updatedAt ?? entry.createdAt ?? 0)
+	if ( Number.isNaN(date.getTime()) ) { return 0 }
+	return date.getTime()
+}
+
+function sortableVersion(value) {
+	return (value ?? '')
+		.toString()
+		.toLowerCase()
+		.replace(/^v/u, '')
+		.split(/[^0-9a-z]+/u)
+		.filter((part) => part !== '')
+		.map((part) => {
+			const numberValue = Number.parseInt(part, 10)
+			return Number.isNaN(numberValue) ? part : numberValue
+		})
+}
+
+function compareVersionParts(left, right) {
+	const maxLength = Math.max(left.length, right.length)
+	for ( let index = 0; index < maxLength; index++ ) {
+		const leftPart = left[index] ?? 0
+		const rightPart = right[index] ?? 0
+		if ( leftPart === rightPart ) { continue }
+		if ( typeof leftPart === 'number' && typeof rightPart === 'number' ) {
+			return leftPart - rightPart
+		}
+		return leftPart.toString().localeCompare(rightPart.toString(), undefined, { numeric : true })
+	}
+	return 0
+}
+
+function primaryVersion(entry) {
+	const versions = uniqueValues(entry.versions ?? [])
+	if ( versions.length === 0 ) { return '' }
+	if ( versions.length === 1 ) { return versions[0] }
+	if ( Array.isArray(entry.sources) && entry.sources.includes('Collection') ) {
+		return versions[0]
+	}
+	return versions[versions.length - 1]
+}
+
+function compareVaultEntries(left, right) {
+	const versionCompare = compareVersionParts(sortableVersion(primaryVersion(right)), sortableVersion(primaryVersion(left)))
+	if ( versionCompare !== 0 ) { return versionCompare }
+	return sortTime(right) - sortTime(left)
+}
+
 function badgeTooltip(value, type) {
 	switch ( type ) {
 		case 'collection' :
@@ -95,6 +144,7 @@ function groupEntries(entries) {
 	}
 
 	return [...groups.values()].map((group) => {
+		const sortedEntries = group.entries.toSorted(compareVaultEntries)
 		const versions = uniqueValues(group.entries.flatMap((entry) => entry.versions ?? []))
 		const collections = uniqueValues(group.entries.flatMap((entry) => entry.collections ?? []))
 		const sources = uniqueValues(group.entries.flatMap((entry) => entry.sources ?? []).map((source) => friendlySourceName(source)))
@@ -110,6 +160,7 @@ function groupEntries(entries) {
 		return {
 			...group,
 			collections,
+			entries : sortedEntries,
 			searchText,
 			sources,
 			totalSize : group.entries.reduce((sum, entry) => sum + (entry.size ?? 0), 0),
@@ -126,10 +177,9 @@ function filterEntries() {
 }
 
 function versionLabel(entry) {
-	const versions = uniqueValues(entry.versions ?? [])
-	if ( versions.length === 0 ) { return 'Version unknown' }
-	if ( versions.length === 1 ) { return `Version ${versions[0]}` }
-	return `Versions seen: ${versions.join(', ')}`
+	const version = primaryVersion(entry)
+	if ( version === '' ) { return 'Version unknown' }
+	return `Version ${version}`
 }
 
 async function renderFileRows(entries, groupIndex) {
@@ -149,6 +199,7 @@ async function renderFileRows(entries, groupIndex) {
 				'<span class="badge text-bg-success" data-bs-placement="top" data-bs-toggle="tooltip" title="At least one collection history entry still points to this ZIP.">referenced by history</span>' :
 				'<span class="badge text-bg-secondary" data-bs-placement="top" data-bs-toggle="tooltip" title="This ZIP is stored in the vault, but the current collection history does not point to it.">not referenced by history</span>',
 			versionLabel      : DATA.escapeSpecial(versionLabel(entry)),
+			versionLabels     : DATA.escapeSpecial(uniqueValues(entry.versions ?? []).join(', ') || 'unknown'),
 		})
 		row.querySelector('.vault-details-toggle').setAttribute('data-bs-toggle', 'collapse')
 		row.querySelector('.vault-details-toggle').setAttribute('data-bs-target', `#${detailsId}`)
@@ -212,5 +263,6 @@ window.addEventListener('DOMContentLoaded', () => {
 	MA.byId('vaultList').addEventListener('contextmenu', window.vault_IPC.context)
 	MA.byId('vaultTextFilter').addEventListener('input', () => { renderVault(filterEntries()) })
 	MA.byId('vaultOpenFolder').addEventListener('click', () => { window.vault_IPC.openFolder() })
+	MA.byId('vaultBackToUpdates').addEventListener('click', () => { window.vault_IPC.dispatchUpdate() })
 	loadVault()
 })

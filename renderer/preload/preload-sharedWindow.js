@@ -37,16 +37,13 @@ const pageAPI = {
 	},
 	'detail' : {
 		functions : {
-			applySelected    : (updates) => ipcRenderer.invoke('update:applySelected', updates),
 			collectName  : (key) => ipcRenderer.invoke('collect:name', key),
 			downloadApplySelected : (downloads) => ipcRenderer.invoke('update:downloadApplySelected', downloads),
-			downloadSelected : (downloads) => ipcRenderer.invoke('update:downloadSelected', downloads),
 			getBinds   : ()    => ipcRenderer.invoke('collect:bindConflict'),
 			getGitHub  : (url) => ipcRenderer.invoke('settings:site:githubLatest', url),
 			getMalware : ()    => ipcRenderer.invoke('collect:malware'),
 			getMod     : (key) => ipcRenderer.invoke('detail:getMod', key),
 			hasRollbackBackup : (update) => ipcRenderer.invoke('update:hasRollbackBackup', update),
-			isStaged   : (update) => ipcRenderer.invoke('update:isStaged', update),
 			rollbackEntries : (update) => ipcRenderer.invoke('update:rollbackEntries', update),
 			rollbackEntry : (entry) => ipcRenderer.invoke('update:rollbackEntry', entry),
 			rollbackLatest : (update) => ipcRenderer.invoke('update:rollbackLatest', update),
@@ -82,6 +79,7 @@ const pageAPI = {
 			all           : () => ipcRenderer.invoke('history:all'),
 			clear         : () => ipcRenderer.invoke('history:clear'),
 			context       : () => ipcRenderer.send('context:copy'),
+			dispatchUpdate : () => ipcRenderer.send('dispatch:update'),
 			rollbackEntry : (entry) => ipcRenderer.invoke('history:rollbackEntry', entry),
 		},
 		validAsync : new Set(),
@@ -273,15 +271,12 @@ const pageAPI = {
 	},
 	'update' : {
 		functions : {
-			applySelected    : (updates) => ipcRenderer.invoke('update:applySelected', updates),
 			dispatchHistory  : () => ipcRenderer.send('dispatch:history'),
 			dispatchVault    : () => ipcRenderer.send('dispatch:vault'),
 			downloadApplySelected : (downloads) => ipcRenderer.invoke('update:downloadApplySelected', downloads),
-			downloadSelected : (downloads) => ipcRenderer.invoke('update:downloadSelected', downloads),
 			get              : ()    => ipcRenderer.invoke('update:list'),
 			getGitHub        : (url) => ipcRenderer.invoke('settings:site:githubLatest', url),
 			hasRollbackBackup : (update) => ipcRenderer.invoke('update:hasRollbackBackup', update),
-			isStaged         : (update) => ipcRenderer.invoke('update:isStaged', update),
 			openURL          : (url) => ipcRenderer.send('win:openURL', url),
 			rollbackEntries  : (update) => ipcRenderer.invoke('update:rollbackEntries', update),
 			rollbackEntry    : (entry) => ipcRenderer.invoke('update:rollbackEntry', entry),
@@ -292,6 +287,7 @@ const pageAPI = {
 		functions : {
 			all        : () => ipcRenderer.invoke('vault:all'),
 			context    : () => ipcRenderer.send('context:copy'),
+			dispatchUpdate : () => ipcRenderer.send('dispatch:update'),
 			openFolder : () => ipcRenderer.invoke('vault:openFolder'),
 		},
 		validAsync : new Set(),

@@ -102,6 +102,8 @@ function filterHistory(entries) {
 				entry.collectionName,
 				entry.fileName,
 				entry.modName,
+				entry.currentVersion,
+				entry.previousVersion,
 				entry.source,
 				entry.sourceURL,
 				entry.stagedPath,
@@ -123,6 +125,22 @@ function canRollbackEntry(entry) {
 	return typeof entry?.backupPath === 'string' &&
 		typeof entry?.targetPath === 'string' &&
 		entry.action !== 'update_rolled_back'
+}
+
+function versionBadges(entry) {
+	const previousVersion = typeof entry?.previousVersion === 'string' && entry.previousVersion !== '' ?
+		entry.previousVersion :
+		null
+	const currentVersion = typeof entry?.currentVersion === 'string' && entry.currentVersion !== '' ?
+		entry.currentVersion :
+		null
+
+	if ( previousVersion === null && currentVersion === null ) { return '' }
+	if ( previousVersion !== null && currentVersion !== null && previousVersion !== currentVersion ) {
+		return `<span class="badge text-bg-secondary">From ${DATA.escapeSpecial(previousVersion)}</span> <span class="badge text-bg-info">To ${DATA.escapeSpecial(currentVersion)}</span>`
+	}
+
+	return `<span class="badge text-bg-info">Version ${DATA.escapeSpecial(currentVersion ?? previousVersion)}</span>`
 }
 
 async function reloadHistory() {
@@ -186,6 +204,7 @@ function renderHistory(entries, totalEntries) {
 			stagedPath     : DATA.escapeSpecial(entry.stagedPath ?? ''),
 			targetPath     : targetPath,
 			timestamp      : DATA.escapeSpecial(formatTimestamp(entry.timestamp)),
+			versionBadges  : versionBadges(entry),
 		})
 		const rollbackNode = node.querySelector('.history-rollback-button')
 		if ( rollbackNode !== null ) {
@@ -210,6 +229,7 @@ window.addEventListener('DOMContentLoaded', () => {
 			await reloadHistory()
 		}
 	})
+	MA.byId('historyBackToUpdates').addEventListener('click', () => { window.history_IPC.dispatchUpdate() })
 	for ( const inputID of ['historyCollectionFilter', 'historyActionFilter', 'historyFromFilter', 'historyToFilter', 'historyTextFilter'] ) {
 		MA.byId(inputID).addEventListener('input', renderFilteredHistory)
 	}
