@@ -51,6 +51,7 @@ function makeCandidateMap(modCollect) {
 			if ( !isGitHubURL(sourceURL) ) { continue }
 
 			candidates[modName] ??= {
+				collectionKeys : [],
 				collections : [],
 				icon        : thisMod.modDesc.iconImage,
 				local       : new Set(),
@@ -58,6 +59,7 @@ function makeCandidateMap(modCollect) {
 				title       : doL10N(thisMod.l10n.title, modCollect.appSettings.force_lang),
 			}
 
+			candidates[modName].collectionKeys.push(collectKey)
 			candidates[modName].collections.push(collectKeyName[collectKey])
 			candidates[modName].local.add(thisMod.modDesc.version)
 		}
@@ -120,6 +122,13 @@ function modListTimeout(timeoutMS = 15000) {
 
 let activeRenderID = 0
 
+function collectionContextText(modCollect) {
+	const activeCollect   = modCollect.opts?.activeCollection ?? null
+	const collectionName  = activeCollect === null ? null : modCollect.collectionToName?.[activeCollect]
+	const collectionLabel = collectionName ?? I18N.defer('history_filter_all_collections', false)
+	return `${I18N.defer('update_list_collection_context', false)} ${DATA.escapeSpecial(collectionLabel)}`
+}
+
 function renderEmpty(messageKey) {
 	MA.byIdHTML('modList', '')
 	MA.byIdHTML('updateStatus', I18N.defer(messageKey, false))
@@ -162,11 +171,13 @@ function getSelectedDownloadCandidates() {
 	return getSelectedCheckboxes()
 		.filter((checkbox) => typeof checkbox.dataset.downloadUrl === 'string')
 		.map((checkbox) => ({
+			collectionKey : checkbox.dataset.collectionKey,
 			collectionName : checkbox.dataset.collectionName,
 			fileName : checkbox.dataset.assetName,
 			modName  : checkbox.dataset.modName,
 			sourceURL : checkbox.dataset.sourceUrl,
 			url      : checkbox.dataset.downloadUrl,
+			version  : checkbox.dataset.githubVersion,
 		}))
 }
 
@@ -175,12 +186,14 @@ async function downloadSelectedZIPs() {
 	if ( downloads.length === 0 ) { return }
 
 	MA.byId('downloadSelectedButton').disabled = true
-	MA.byIdHTML('updateStatus', I18N.defer('update_list_downloading', false))
-	const result = await window.update_IPC.downloadSelected(downloads)
+	MA.byIdHTML('updateStatus', I18N.defer('update_list_updating', false))
+	const result = await window.update_IPC.downloadApplySelected(downloads)
 	if ( result.ok ) {
-		MA.byIdHTML('updateStatus', `${I18N.defer('update_list_download_complete', false)} ${result.count} / ${downloads.length}`)
+		const modCollect = await window.update_IPC.get()
+		await startFromModList(modCollect)
+		MA.byIdHTML('updateStatus', `${I18N.defer('update_list_update_complete', false)} ${result.count} / ${downloads.length}`)
 	} else {
-		MA.byIdHTML('updateStatus', `${I18N.defer('update_list_download_failed', false)} ${result.error}`)
+		MA.byIdHTML('updateStatus', `${I18N.defer('update_list_update_failed', false)} ${result.error}`)
 	}
 	updateSelectedCount()
 }
@@ -212,10 +225,13 @@ async function displayCandidates(candidates, renderID) {
 		const collectionList = entry.collections
 			.sort((a, b) => Intl.Collator().compare(a, b))
 			.map((collection) => `<li><span class="fw-bold">${DATA.escapeSpecial(collection)}</span></li>`)
-
+		const assetName = result.assetName ?? null
+		const collectionKey = entry.collectionKeys[0] ?? null
+		const collectionName = entry.collections[0] ?? 'updates'
 		return {
-			assetName      : result.assetName ?? null,
-			collectionName : entry.collections[0] ?? 'updates',
+			assetName      : assetName,
+			collectionKey  : collectionKey,
+			collectionName : collectionName,
 			downloadURL    : result.downloadURL ?? null,
 			modName        : key,
 			node           : DATA.templateEngine('update_line', {
@@ -229,6 +245,7 @@ async function displayCandidates(candidates, renderID) {
 				statusText    : statusText(result),
 			}),
 			sourceURL : entry.sourceURL,
+			version   : result.version,
 		}
 	})
 
@@ -236,15 +253,17 @@ async function displayCandidates(candidates, renderID) {
 
 	if ( renderID !== activeRenderID ) { return }
 
-	for ( const { assetName, collectionName, downloadURL, modName, node, sourceURL } of updateRows ) {
+	for ( const { assetName, collectionKey, collectionName, downloadURL, modName, node, sourceURL, version } of updateRows ) {
 		node.firstElementChild.classList.add('bg-warning-subtle')
 		const selectCheckbox = node.querySelector('.update-select-checkbox')
-		if ( downloadURL !== null ) {
+		if ( assetName !== null ) {
 			selectCheckbox.dataset.assetName = assetName
 			selectCheckbox.dataset.collectionName = collectionName
-			selectCheckbox.dataset.downloadUrl = downloadURL
+			selectCheckbox.dataset.collectionKey = collectionKey
 			selectCheckbox.dataset.modName = modName
 		}
+		if ( downloadURL !== null ) { selectCheckbox.dataset.downloadUrl = downloadURL }
+		selectCheckbox.dataset.githubVersion = version
 		selectCheckbox.dataset.sourceUrl = sourceURL
 		selectCheckbox.addEventListener('change', updateSelectedCount)
 		const sourceButton = node.querySelector('.update-source-button')
@@ -275,6 +294,7 @@ async function startFromModList(modCollect) {
 		return
 	}
 	try {
+		MA.byIdHTML('updateCollectionContext', collectionContextText(modCollect))
 		MA.byIdHTML('updateStatus', `${I18N.defer('update_list_checking', false)} ${I18N.defer('update_list_loading', false)}`)
 		MA.byIdHTML('modList', '')
 		MA.byId('selectionControls').classList.add('d-none')

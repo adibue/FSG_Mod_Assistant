@@ -9,9 +9,16 @@
 let historyEntries = []
 
 const fallbackLabels = {
+	history_action_update_applied     : 'Update applied',
+	history_action_update_rolled_back : 'Update rolled back',
 	history_action_update_staged      : 'Update staged',
+	history_backup_saved              : 'Backup saved',
 	history_filter_all_actions        : 'All actions',
 	history_filter_all_collections    : 'All collections',
+	history_rollback_button           : 'Rollback to this version',
+	history_rollback_failed           : 'Rollback failed:',
+	history_rollback_restored         : 'Rollback restored.',
+	history_rollback_restoring        : 'Restoring rollback backup...',
 }
 
 function formatTimestamp(timestamp) {
@@ -37,6 +44,8 @@ function plainLabel(key) {
 }
 
 function actionLabelText(action) {
+	if ( action === 'update_applied' ) { return plainLabel('history_action_update_applied') }
+	if ( action === 'update_rolled_back' ) { return plainLabel('history_action_update_rolled_back') }
 	if ( action === 'update_staged' ) { return plainLabel('history_action_update_staged') }
 	return action ?? ''
 }
@@ -96,6 +105,8 @@ function filterHistory(entries) {
 				entry.source,
 				entry.sourceURL,
 				entry.stagedPath,
+				entry.backupPath,
+				entry.targetPath,
 			].join(' '))
 			if ( !searchText.includes(textFilter) ) { return false }
 		}
@@ -106,6 +117,32 @@ function filterHistory(entries) {
 
 function renderFilteredHistory() {
 	renderHistory(filterHistory(historyEntries), historyEntries.length)
+}
+
+function canRollbackEntry(entry) {
+	return typeof entry?.backupPath === 'string' &&
+		typeof entry?.targetPath === 'string' &&
+		entry.action !== 'update_rolled_back'
+}
+
+async function reloadHistory() {
+	historyEntries = await window.history_IPC.all()
+	setupFilters(historyEntries)
+	renderFilteredHistory()
+}
+
+async function rollbackHistoryEntry(entry, button) {
+	button.disabled = true
+	MA.byIdHTML('historyStatus', plainLabel('history_rollback_restoring'))
+
+	const result = await window.history_IPC.rollbackEntry(entry)
+	if ( result.ok ) {
+		MA.byIdHTML('historyStatus', plainLabel('history_rollback_restored'))
+		await reloadHistory()
+	} else {
+		MA.byIdHTML('historyStatus', `${plainLabel('history_rollback_failed')} ${DATA.escapeSpecial(result.error)}`)
+		button.disabled = false
+	}
 }
 
 function renderHistory(entries, totalEntries) {
@@ -123,17 +160,37 @@ function renderHistory(entries, totalEntries) {
 		const replaceBadge = entry.replacedExisting ?
 			`<span class="badge text-bg-success">${I18N.defer('history_replaced_existing', false)}</span>` :
 			''
+		const backupBadge = entry.backupPath ?
+			`<span class="badge text-bg-success">${I18N.defer('history_backup_saved', false)}</span>` :
+			''
+		const backupPath = entry.backupPath ?
+			`<div class="small mt-1 history-path user-select-text">${DATA.escapeSpecial(entry.backupPath)}</div>` :
+			''
+		const targetPath = entry.targetPath ?
+			`<div class="small mt-1 history-path user-select-text">${DATA.escapeSpecial(entry.targetPath)}</div>` :
+			''
+		const rollbackButton = canRollbackEntry(entry) ?
+			`<button class="btn btn-sm btn-info mt-2 history-rollback-button" type="button">${DATA.escapeSpecial(plainLabel('history_rollback_button'))}</button>` :
+			''
 		const node = DATA.templateEngine('history_line', {
 			action         : actionLabel(entry.action),
+			backupBadge    : backupBadge,
+			backupPath     : backupPath,
 			collectionName : DATA.escapeSpecial(entry.collectionName ?? ''),
 			fileName       : DATA.escapeSpecial(entry.fileName ?? ''),
 			modName        : DATA.escapeSpecial(entry.modName ?? ''),
 			replaceBadge   : replaceBadge,
+			rollbackButton : rollbackButton,
 			source         : DATA.escapeSpecial(entry.source ?? ''),
 			sourceURL      : DATA.escapeSpecial(entry.sourceURL ?? ''),
 			stagedPath     : DATA.escapeSpecial(entry.stagedPath ?? ''),
+			targetPath     : targetPath,
 			timestamp      : DATA.escapeSpecial(formatTimestamp(entry.timestamp)),
 		})
+		const rollbackNode = node.querySelector('.history-rollback-button')
+		if ( rollbackNode !== null ) {
+			rollbackNode.addEventListener('click', () => { rollbackHistoryEntry(entry, rollbackNode) })
+		}
 		list.appendChild(node)
 	}
 }
@@ -149,9 +206,5 @@ window.addEventListener('DOMContentLoaded', () => {
 	for ( const inputID of ['historyCollectionFilter', 'historyActionFilter', 'historyFromFilter', 'historyToFilter', 'historyTextFilter'] ) {
 		MA.byId(inputID).addEventListener('input', renderFilteredHistory)
 	}
-	window.history_IPC.all().then((entries) => {
-		historyEntries = entries
-		setupFilters(historyEntries)
-		renderFilteredHistory()
-	})
+	reloadHistory()
 })

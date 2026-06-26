@@ -37,10 +37,17 @@ const pageAPI = {
 	},
 	'detail' : {
 		functions : {
+			applySelected    : (updates) => ipcRenderer.invoke('update:applySelected', updates),
+			collectName  : (key) => ipcRenderer.invoke('collect:name', key),
+			downloadApplySelected : (downloads) => ipcRenderer.invoke('update:downloadApplySelected', downloads),
+			downloadSelected : (downloads) => ipcRenderer.invoke('update:downloadSelected', downloads),
 			getBinds   : ()    => ipcRenderer.invoke('collect:bindConflict'),
 			getGitHub  : (url) => ipcRenderer.invoke('settings:site:githubLatest', url),
 			getMalware : ()    => ipcRenderer.invoke('collect:malware'),
 			getMod     : (key) => ipcRenderer.invoke('detail:getMod', key),
+			hasRollbackBackup : (update) => ipcRenderer.invoke('update:hasRollbackBackup', update),
+			isStaged   : (update) => ipcRenderer.invoke('update:isStaged', update),
+			rollbackLatest : (update) => ipcRenderer.invoke('update:rollbackLatest', update),
 
 			sendBase    : (pageObject)   => ipcRenderer.send('dispatch:basegame', pageObject),
 			sendCompare : (compareArray) => ipcRenderer.send('dispatch:compare', compareArray),
@@ -70,8 +77,9 @@ const pageAPI = {
 	},
 	'history' : {
 		functions : {
-			all     : () => ipcRenderer.invoke('history:all'),
-			context : () => ipcRenderer.send('context:copy'),
+			all           : () => ipcRenderer.invoke('history:all'),
+			context       : () => ipcRenderer.send('context:copy'),
+			rollbackEntry : (entry) => ipcRenderer.invoke('history:rollbackEntry', entry),
 		},
 		validAsync : new Set(),
 	},
@@ -125,6 +133,7 @@ const pageAPI = {
 	
 			cancelDownload    : () => { ipcRenderer.send('file:downloadCancel') },
 			getGitHub         : (url) => ipcRenderer.invoke('settings:site:githubLatest', url),
+			hasRollbackBackup : (update) => ipcRenderer.invoke('update:hasRollbackBackup', update),
 			minimizeToTray    : () => { ipcRenderer.send('main:minimizeToTray') },
 			startFarmSim      : () => { ipcRenderer.send('dispatch:game') },
 			updateApplication : () => { ipcRenderer.send('main:runUpdateInstall') },
@@ -261,10 +270,14 @@ const pageAPI = {
 	},
 	'update' : {
 		functions : {
+			applySelected    : (updates) => ipcRenderer.invoke('update:applySelected', updates),
 			dispatchHistory  : () => ipcRenderer.send('dispatch:history'),
+			downloadApplySelected : (downloads) => ipcRenderer.invoke('update:downloadApplySelected', downloads),
 			downloadSelected : (downloads) => ipcRenderer.invoke('update:downloadSelected', downloads),
 			get              : ()    => ipcRenderer.invoke('update:list'),
 			getGitHub        : (url) => ipcRenderer.invoke('settings:site:githubLatest', url),
+			hasRollbackBackup : (update) => ipcRenderer.invoke('update:hasRollbackBackup', update),
+			isStaged         : (update) => ipcRenderer.invoke('update:isStaged', update),
 			openURL          : (url) => ipcRenderer.send('win:openURL', url),
 		},
 		validAsync : new Set(['mods:list']),
