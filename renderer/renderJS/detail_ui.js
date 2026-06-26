@@ -126,6 +126,8 @@ class windowState {
 		MA.byId('malware-found')?.clsHide()
 		MA.byId('download_latest_update')?.clsHide()
 		MA.byId('rollback_latest_update')?.clsHide()
+		MA.byId('rollback_versions')?.clsHide()
+		MA.byIdHTML('rollback_versions', '')
 	}
 
 	// MARK: crops
@@ -328,10 +330,14 @@ class windowState {
 
 	#refreshGitHubVersion(sourceURL) {
 		if ( !this.#isGitHubURL(sourceURL) ) {
+			const updatePointer = this.#updatePointer(null, sourceURL)
 			MA.byIdHTML('github_version', `<em>${I18N.defer('update_source_not_configured', false )}</em>`)
 			MA.byIdHTML('update_status', `<em>${I18N.defer('update_source_not_configured', false )}</em>`)
 			MA.byId('download_latest_update')?.clsHide()
-			MA.byId('rollback_latest_update')?.clsHide()
+			window.detail_IPC.hasRollbackBackup(updatePointer).then((hasRollbackBackup) => {
+				this.#refreshRollbackButton(updatePointer, hasRollbackBackup)
+				this.#refreshRollbackVersions(updatePointer, hasRollbackBackup)
+			})
 			return
 		}
 
@@ -339,14 +345,17 @@ class windowState {
 		MA.byIdText('update_status', I18N.defer('update_status_checking', false))
 
 		window.detail_IPC.getGitHub(sourceURL).then(async (result) => {
+			const updatePointer = this.#updatePointer(result.assetName ?? null, sourceURL)
 			if ( !result.ok ) {
 				MA.byIdHTML('github_version', `<em>${I18N.defer(result.error === 'no_release_or_tag' ? 'update_status_no_github_release' : 'update_status_failed', false )}</em>`)
 				MA.byIdHTML('update_status', `<span class="text-warning">${I18N.defer('update_status_unknown', false)}</span>`)
 				MA.byId('download_latest_update')?.clsHide()
+				const hasRollbackBackup = await window.detail_IPC.hasRollbackBackup(updatePointer)
+				this.#refreshRollbackButton(updatePointer, hasRollbackBackup)
+				this.#refreshRollbackVersions(updatePointer, hasRollbackBackup)
 				return
 			}
 
-			const updatePointer = this.#updatePointer(result.assetName, sourceURL)
 			const hasRollbackBackup = await window.detail_IPC.hasRollbackBackup(updatePointer)
 			const safeVersion = DATA.escapeSpecial(result.version)
 			const safeURL     = DATA.escapeSpecial(result.url)
@@ -354,11 +363,13 @@ class windowState {
 			MA.byIdHTML('update_status', this.#versionStatusHTML(this.mod.modDesc.version, result.version, hasRollbackBackup))
 			this.#refreshDownloadButton(result, updatePointer)
 			this.#refreshRollbackButton(updatePointer, hasRollbackBackup)
+			this.#refreshRollbackVersions(updatePointer, hasRollbackBackup)
 		}).catch(() => {
 			MA.byIdHTML('github_version', `<em>${I18N.defer('update_status_failed', false )}</em>`)
 			MA.byIdHTML('update_status', `<span class="text-warning">${I18N.defer('update_status_unknown', false)}</span>`)
 			MA.byId('download_latest_update')?.clsHide()
 			MA.byId('rollback_latest_update')?.clsHide()
+			MA.byId('rollback_versions')?.clsHide()
 		})
 	}
 
@@ -380,7 +391,8 @@ class windowState {
 		const canDownload = isUpdate && result.hasDownload && typeof result.downloadURL === 'string' && typeof result.assetName === 'string'
 
 		downloadButton.clsShow(canDownload)
-		downloadButton.disabled = false
+		downloadButton.disabled = !canDownload
+		downloadButton.onclick = null
 		if ( !canDownload ) { return }
 
 		downloadButton.onclick = async () => {
@@ -406,6 +418,77 @@ class windowState {
 				MA.byIdHTML('update_status', `<span class="text-warning">${I18N.defer('update_list_update_failed', false)} ${DATA.escapeSpecial(resultDownload.error)}</span>`)
 			}
 		}
+	}
+
+	#versionMatchesCurrent(version) {
+		if ( typeof version !== 'string' || version === '' ) { return false }
+		const compareResult = DATA.versionCompare(this.mod.modDesc.version, version)
+		return compareResult === 0 || (Number.isNaN(compareResult) && !DATA.versionDifferent(this.mod.modDesc.version, version))
+	}
+
+	async #refreshRollbackVersions(updatePointer, hasRollbackBackup = false) {
+		const rollbackDiv = MA.byId('rollback_versions')
+		if ( rollbackDiv === null ) { return }
+
+		const entries = await window.detail_IPC.rollbackEntries(updatePointer)
+		if ( entries.length === 0 ) {
+			rollbackDiv.clsHide()
+			rollbackDiv.innerHTML = ''
+			return
+		}
+
+		MA.byId('rollback_latest_update')?.clsHide()
+		rollbackDiv.clsShow()
+		rollbackDiv.innerHTML = `
+			<div class="border rounded p-2">
+				<div class="fw-bold mb-2">Available rollback versions</div>
+				<div class="d-grid gap-2" id="rollback_version_list"></div>
+			</div>`
+
+		const listDiv = MA.byId('rollback_version_list')
+		for ( const [index, entry] of entries.entries() ) {
+			const versionLabel = entry.previousVersion ?? entry.currentVersion ?? (entry.backupHash !== null ? entry.backupHash.slice(0, 12) : 'backup')
+			const isCurrentVersion = this.#versionMatchesCurrent(entry.previousVersion ?? entry.currentVersion)
+			const timestamp = entry.timestamp === null ?
+				'Unknown date' :
+				new Date(Date.parse(entry.timestamp)).toLocaleString(this.locale, { timeZoneName : 'short' })
+			const sourceLabel = entry.source ?? 'Backup'
+			const template = document.createElement('template')
+			template.innerHTML = `
+				<div class="bg-secondary bg-opacity-25 rounded p-2">
+					<div class="d-flex flex-wrap justify-content-between gap-2">
+						<div>
+							<div class="fw-bold">Version ${DATA.escapeSpecial(versionLabel)}</div>
+							<div class="small">${DATA.escapeSpecial(timestamp)}</div>
+							<div class="small">${DATA.escapeSpecial(sourceLabel)}</div>
+						</div>
+						<button class="btn btn-sm ${isCurrentVersion ? 'btn-secondary' : 'btn-info'} rollback-version-button" type="button" data-index="${index}" ${isCurrentVersion ? 'disabled' : ''}>${isCurrentVersion ? 'Current version' : 'Restore this version'}</button>
+					</div>
+				</div>
+			`
+			const row = template.content.firstElementChild
+			if ( isCurrentVersion ) {
+				listDiv.appendChild(row)
+				continue
+			}
+
+			row.querySelector('.rollback-version-button').addEventListener('click', async (event) => {
+				const button = event.currentTarget
+				button.disabled = true
+				MA.byIdHTML('update_status', I18N.defer('update_status_rollback_applying', false))
+				const result = await window.detail_IPC.rollbackEntry(entry)
+				if ( result.ok ) {
+					MA.byIdHTML('update_status', `<span class="text-success">${I18N.defer('update_status_rollback_restored', false)}</span>`)
+					this.getMod()
+				} else {
+					button.disabled = false
+					MA.byIdHTML('update_status', `<span class="text-warning">${I18N.defer('update_status_rollback_failed', false)} ${DATA.escapeSpecial(result.error)}</span>`)
+				}
+			})
+			listDiv.appendChild(row)
+		}
+
+		if ( !hasRollbackBackup ) { MA.byId('rollback_latest_update')?.clsHide() }
 	}
 
 	#refreshRollbackButton(updatePointer, hasRollbackBackup) {

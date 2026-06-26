@@ -624,6 +624,7 @@ ipcMain.handle('gamelog:getFile', () => funcLib.prefs.gameLogFile())
 ipcMain.on('gamelog:folder',   () => shell.showItemInFolder(funcLib.prefs.gameLogFile()) )
 ipcMain.on('dispatch:gamelog', () => { serveIPC.windowLib.createNamedWindow('gamelog') })
 ipcMain.on('dispatch:history', () => { serveIPC.windowLib.createNamedWindow('history') })
+ipcMain.on('dispatch:vault', () => { serveIPC.windowLib.createNamedWindow('vault') })
 
 
 // MARK : mini window
@@ -984,6 +985,57 @@ async function registerModLibraryFile(filePath, metadata = {}) {
 	}
 }
 
+function findCachedModLibraryFile(metadata = {}) {
+	if ( typeof metadata.modName !== 'string' || typeof metadata.version !== 'string' ) { return null }
+
+	const records = serveIPC.storeLibrary.get('records', {})
+	return Object.values(records).find((record) => {
+		if ( typeof record?.filePath !== 'string' || !fs.existsSync(record.filePath) ) { return false }
+		if ( !Array.isArray(record.modNames) || !record.modNames.includes(metadata.modName) ) { return false }
+		if ( !Array.isArray(record.versions) || !record.versions.includes(metadata.version) ) { return false }
+		if ( typeof metadata.sourceURL === 'string' && metadata.sourceURL !== '' && typeof record.sourceURL === 'string' ) {
+			return record.sourceURL === metadata.sourceURL
+		}
+		return true
+	}) ?? null
+}
+
+function getModLibrarySummary() {
+	const records = serveIPC.storeLibrary.get('records', {})
+	const historyEntries = serveIPC.storeHistory.get('entries', [])
+	const usedHashes = new Set(historyEntries.flatMap((entry) => [entry.backupHash, entry.currentHash]).filter((value) => typeof value === 'string'))
+	const usedPaths = new Set(historyEntries.flatMap((entry) => [entry.backupPath, entry.currentLibraryPath]).filter((value) => typeof value === 'string'))
+	const entries = Object.values(records)
+		.map((record) => {
+			const fileExists = typeof record?.filePath === 'string' && fs.existsSync(record.filePath)
+			const size = fileExists ? fs.statSync(record.filePath).size : (record.size ?? 0)
+			return {
+				collections  : Array.isArray(record.collections) ? record.collections : [],
+				createdAt    : record.createdAt ?? null,
+				fileExists   : fileExists,
+				fileName     : record.fileName ?? path.basename(record.filePath ?? ''),
+				filePath     : record.filePath ?? null,
+				hash         : record.hash ?? null,
+				isUsed       : usedHashes.has(record.hash) || usedPaths.has(record.filePath),
+				modNames     : Array.isArray(record.modNames) ? record.modNames : [],
+				size         : size,
+				sources      : Array.isArray(record.sources) ? record.sources : [],
+				sourceURL    : record.sourceURL ?? null,
+				updatedAt    : record.updatedAt ?? null,
+				versions     : Array.isArray(record.versions) ? record.versions : [],
+			}
+		})
+		.sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''))
+
+	return {
+		entries,
+		folder     : path.join(app.getPath('userData'), 'mod-library'),
+		totalCount : entries.length,
+		totalSize  : entries.reduce((sum, entry) => sum + entry.size, 0),
+		usedCount  : entries.filter((entry) => entry.isUsed).length,
+	}
+}
+
 async function backupModToLibrary(filePath, metadata = {}) {
 	if ( !fs.existsSync(filePath) ) {
 		return {
@@ -1175,15 +1227,21 @@ async function downloadAndApplyUpdate(download) {
 	const tempPath = path.join(tempFolder, `${Date.now()}-${safeDownloadFileName(download.fileName)}`)
 
 	try {
-		await downloadGitHubZipToPath(download, tempPath)
-		const downloadLibrary = await registerModLibraryFile(tempPath, {
-			collectionName,
-			fileName  : download.fileName,
+		const cachedLibrary = findCachedModLibraryFile({
 			modName   : download.modName,
-			source    : 'GitHub',
 			sourceURL : download.sourceURL ?? null,
 			version   : download.version,
 		})
+		const downloadLibrary = cachedLibrary === null ?
+			await downloadGitHubZipToPath(download, tempPath).then(() => registerModLibraryFile(tempPath, {
+				collectionName,
+				fileName  : download.fileName,
+				modName   : download.modName,
+				source    : 'GitHub',
+				sourceURL : download.sourceURL ?? null,
+				version   : download.version,
+			})) :
+			cachedLibrary
 		const backupResult = await backupModToLibrary(targetPath, {
 			collectionName,
 			fileName  : path.basename(targetPath),
@@ -1192,17 +1250,18 @@ async function downloadAndApplyUpdate(download) {
 			sourceURL : download.sourceURL ?? null,
 			version   : modRecord.modDesc.version,
 		})
-		await fsPromise.copyFile(tempPath, targetPath)
+		await fsPromise.copyFile(downloadLibrary.libraryPath ?? downloadLibrary.filePath, targetPath)
 
 		return {
 			backupHash : backupResult.backupHash,
 			backupPath : backupResult.backupPath,
 			collectionName,
 			currentHash : downloadLibrary.hash,
-			currentLibraryPath : downloadLibrary.libraryPath,
+			currentLibraryPath : downloadLibrary.libraryPath ?? downloadLibrary.filePath,
 			previousVersion : modRecord.modDesc.version,
 			targetPath,
 			tempPath,
+			usedCache : cachedLibrary !== null,
 		}
 	} finally {
 		await fsPromise.rm(tempPath, { force : true }).catch(() => {})
@@ -1228,6 +1287,47 @@ function getLatestRollbackEntry(update) {
 		if ( typeof entry?.backupPath !== 'string' ) { return false }
 		return fs.existsSync(entry.backupPath)
 	}) ?? null
+}
+
+function getRollbackEntries(update) {
+	if ( typeof update?.collectionKey !== 'string' || typeof update?.modName !== 'string' ) { return [] }
+
+	const collectionName = typeof update.collectionName === 'string' ?
+		update.collectionName :
+		serveIPC.modCollect.mapCollectionToName(update.collectionKey)
+	const historyEntries = serveIPC.storeHistory.get('entries', [])
+	const seenBackups = new Set()
+
+	const rollbackEntries = historyEntries
+		.filter((entry) => {
+			if ( entry?.action !== 'update_applied' ) { return false }
+			if ( entry?.collectionName !== collectionName ) { return false }
+			if ( entry?.modName !== update.modName ) { return false }
+			if ( typeof entry?.backupPath !== 'string' ) { return false }
+			if ( !fs.existsSync(entry.backupPath) ) { return false }
+			const backupKey = entry.backupHash ?? entry.backupPath
+			if ( seenBackups.has(backupKey) ) { return false }
+			seenBackups.add(backupKey)
+			return true
+		})
+		.map((entry) => ({
+			action           : entry.action ?? 'unknown',
+			backupHash       : entry.backupHash ?? null,
+			backupPath       : entry.backupPath,
+			collectionName   : entry.collectionName ?? collectionName,
+			currentVersion   : entry.currentVersion ?? null,
+			fileName         : entry.fileName ?? update.fileName ?? null,
+			modName          : entry.modName ?? update.modName,
+			previousVersion  : entry.previousVersion ?? null,
+			source           : entry.source ?? null,
+			sourceURL        : entry.sourceURL ?? null,
+			targetPath       : entry.targetPath ?? null,
+			timestamp        : entry.timestamp ?? null,
+		}))
+
+	return rollbackEntries.some((entry) => entry.previousVersion !== null || entry.currentVersion !== null) ?
+		rollbackEntries.filter((entry) => entry.previousVersion !== null || entry.currentVersion !== null) :
+		rollbackEntries
 }
 
 async function rollbackLatestUpdate(update) {
@@ -1478,6 +1578,12 @@ ipcMain.handle('update:list', () => serveIPC.modCollect.toRenderer({
 	modSites         : serveIPC.storeSites.store,
 }))
 ipcMain.handle('history:all', () => serveIPC.storeHistory.get('entries', []))
+ipcMain.handle('history:clear', () => {
+	serveIPC.storeHistory.set('entries', [])
+	return { ok : true }
+})
+ipcMain.handle('vault:all', () => getModLibrarySummary())
+ipcMain.handle('vault:openFolder', () => shell.openPath(path.join(app.getPath('userData'), 'mod-library')))
 ipcMain.handle('history:rollbackEntry', async (_, entry) => {
 	try {
 		const backupFolder = path.join(app.getPath('userData'), 'update-backups')
@@ -1521,6 +1627,32 @@ ipcMain.handle('update:isStaged', (_, update) => {
 	return fs.existsSync(stagedPath)
 })
 ipcMain.handle('update:hasRollbackBackup', (_, update) => hasRollbackBackup(update))
+ipcMain.handle('update:rollbackEntries', (_, update) => getRollbackEntries(update))
+ipcMain.handle('update:rollbackEntry', async (_, entry) => {
+	try {
+		const rollbackResult = await rollbackHistoryEntry(entry)
+		addCollectionHistoryEntry({
+			action           : 'update_rolled_back',
+			backupHash       : rollbackResult.backupHash,
+			backupPath       : rollbackResult.backupPath,
+			collectionName   : rollbackResult.collectionName,
+			fileName         : rollbackResult.fileName,
+			modName          : rollbackResult.modName,
+			replacedExisting : rollbackResult.backupPath !== null,
+			rollbackHash     : rollbackResult.rollbackHash,
+			source           : 'Rollback',
+			sourceURL        : rollbackResult.sourceURL,
+			stagedPath       : rollbackResult.rollbackPath,
+			targetPath       : rollbackResult.targetPath,
+		})
+
+		funcLib.general.toggleFolderDirty()
+		await processModFoldersAndWait()
+		return { ok : true }
+	} catch (err) {
+		return { ok : false, error : err.message }
+	}
+})
 ipcMain.handle('update:rollbackLatest', async (_, update) => {
 	try {
 		const backupFolder = path.join(app.getPath('userData'), 'update-backups')
@@ -1645,7 +1777,7 @@ ipcMain.handle('update:downloadApplySelected', async (_, downloads) => {
 				modName          : download.modName,
 				previousVersion  : updateResult.previousVersion ?? null,
 				replacedExisting : updateResult.backupPath !== null,
-				source           : 'GitHub',
+				source           : updateResult.usedCache ? 'GitHub cache' : 'GitHub',
 				sourceURL        : download.sourceURL,
 				stagedPath       : null,
 				targetPath       : updateResult.targetPath,

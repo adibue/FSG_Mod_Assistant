@@ -313,6 +313,7 @@ window.addEventListener('DOMContentLoaded', () => {
 	MA.byIdEventIfExists('openSelectedButton', openSelectedSources)
 	MA.byIdEventIfExists('downloadSelectedButton', downloadSelectedZIPs)
 	MA.byIdEventIfExists('historyButton', () => window.update_IPC.dispatchHistory())
+	MA.byIdEventIfExists('vaultButton', () => window.update_IPC.dispatchVault())
 
 	window.update_IPC.receive('mods:list', (modCollect) => {
 		startFromModList(modCollect)

@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<!-- _______           __ _______               __         __
+		|   |   |.-----.--|  |   _   |.-----.-----.|__|.-----.|  |_
+		|       ||  _  |  _  |       ||__ --|__ --||  ||__ --||   _|
+		|__|_|__||_____|_____|___|___||_____|_____||__||_____||____|
+		(c) 2022-present FSG Modding.  MIT License. -->
+
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline';">
+	<link rel="stylesheet" href="inc/bootstrap.min.css">
+	<link rel="stylesheet" href="inc/fsico.css">
+	<script src="inc/bootstrap.bundle.min.js"></script>
+	<script src="renderJS/util/util_lib.js"></script>
+	<script src="renderJS/vault_ui.js"></script>
+	<style>
+		.vault-path {
+			word-break: break-all;
+		}
+	</style>
+</head>
+<body data-bs-theme="dark" class="overflow-custom2">
+	<div class="container-fluid px-2 user-select-none">
+		<div class="sticky-top pb-2 bg-body border-bottom mb-3">
+			<div class="row w-100 g-0" style="-webkit-app-region: drag;">
+				<div class="col-7 pt-2">
+					<i18n-text class="h2 ps-2 mastHead" data-key="app_name"></i18n-text>
+				</div>
+				<div class="col-5 pt-4 mt-3">
+					<span class="badge bg-primary mx-auto w-100 d-block rounded-3 h4 fs-5">Mod Vault</span>
+				</div>
+			</div>
+		</div>
+
+		<div class="mx-2 mb-3 alert alert-secondary" id="vaultStatus">Loading mod vault...</div>
+
+		<div class="mx-2 mb-3 card">
+			<div class="card-body">
+				<div class="row g-2">
+					<div class="col-md-3">
+						<div class="small text-body-secondary">Stored ZIP files</div>
+						<div class="fs-4" id="vaultCount">0</div>
+					</div>
+					<div class="col-md-3">
+						<div class="small text-body-secondary">Referenced by history</div>
+						<div class="fs-4" id="vaultUsedCount">0</div>
+					</div>
+					<div class="col-md-3">
+						<div class="small text-body-secondary">Total size</div>
+						<div class="fs-4" id="vaultSize">0 B</div>
+					</div>
+					<div class="col-md-3 d-flex align-items-end">
+						<button class="btn btn-sm btn-secondary w-100" id="vaultOpenFolder" type="button">Open vault folder</button>
+					</div>
+					<div class="col-12">
+						<label class="form-label small" for="vaultTextFilter">Search</label>
+						<input class="form-control form-control-sm" id="vaultTextFilter" placeholder="Search mod name, version, source, or collection" type="search">
+					</div>
+					<div class="col-12 small text-body-secondary">
+						Vault folder: <span class="vault-path user-select-text" id="vaultFolder"></span>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<div class="list-group mx-2 my-3" id="vaultList"></div>
+	</div>
+
+<template id="vault_line">
+	<li class="list-group-item">
+		<div class="d-flex justify-content-between gap-3">
+			<div>
+				<div class="fw-bold fs-5"><template-var>modName</template-var></div>
+				<div class="small text-body-secondary"><template-var>fileCount</template-var></div>
+			</div>
+			<div class="text-end">
+				<div class="fw-bold"><template-var>totalSize</template-var></div>
+				<div class="small text-body-secondary"><template-var>versionSummary</template-var></div>
+			</div>
+		</div>
+		<button class="btn btn-sm btn-outline-info mt-3 vault-group-toggle" type="button">
+			Show stored ZIPs
+		</button>
+		<div class="collapse mt-3 vault-group-body"><template-var>fileRows</template-var></div>
+	</li>
+</template>
+
+<template id="vault_file_row">
+	<div class="border rounded p-2 mb-2">
+		<div class="d-flex justify-content-between gap-2">
+			<div>
+				<div class="fw-bold"><template-var>versionLabel</template-var></div>
+				<div class="small fst-italic"><template-var>fileName</template-var></div>
+			</div>
+			<div class="text-end">
+				<div><template-var>usedBadge</template-var><template-var>missingBadge</template-var></div>
+				<div class="small"><template-var>size</template-var></div>
+			</div>
+		</div>
+		<div class="mt-2 d-flex flex-wrap gap-1">
+			<template-var>sourceBadges</template-var>
+			<template-var>collectionBadges</template-var>
+		</div>
+		<div class="small mt-2 text-body-secondary"><template-var>updatedAt</template-var></div>
+		<div class="mt-2">
+			<button class="btn btn-sm btn-outline-secondary vault-details-toggle" type="button">
+				Technical details
+			</button>
+		</div>
+		<div class="collapse mt-2 vault-technical-details">
+			<div class="small vault-path user-select-text">Path: <template-var>filePath</template-var></div>
+			<div class="small vault-path user-select-text">Fingerprint: <template-var>hash</template-var></div>
+		</div>
+	</div>
+</template>
+
+</body>
+</html>

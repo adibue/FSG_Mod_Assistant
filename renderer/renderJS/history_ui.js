@@ -203,6 +203,13 @@ window.addEventListener('DOMContentLoaded', () => {
 		}
 		renderFilteredHistory()
 	})
+	MA.byId('historyClearLog').addEventListener('click', async () => {
+		if ( !confirm('Clear the collection history log? This will not delete mod backups or mod files.') ) { return }
+		const result = await window.history_IPC.clear()
+		if ( result.ok ) {
+			await reloadHistory()
+		}
+	})
 	for ( const inputID of ['historyCollectionFilter', 'historyActionFilter', 'historyFromFilter', 'historyToFilter', 'historyTextFilter'] ) {
 		MA.byId(inputID).addEventListener('input', renderFilteredHistory)
 	}
