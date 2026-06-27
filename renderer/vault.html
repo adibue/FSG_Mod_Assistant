@@ -55,17 +55,33 @@
 						<div class="fs-4" id="vaultSize">0 B</div>
 					</div>
 					<div class="col-md-3 d-flex align-items-end">
-						<button class="btn btn-sm btn-secondary w-100" id="vaultOpenFolder" type="button">Open vault folder</button>
+						<button class="btn btn-sm btn-success w-100" id="vaultImportCollections" type="button">Scan collections into vault</button>
 					</div>
 					<div class="col-md-3 d-flex align-items-end">
 						<button class="btn btn-sm btn-info w-100" id="vaultBackToUpdates" type="button">Back to updates</button>
 					</div>
+					<div class="col-md-4">
+						<label class="form-label small" for="vaultTypeFilter">Mod type</label>
+						<select class="form-select form-select-sm" id="vaultTypeFilter">
+							<option value="">All mod types</option>
+						</select>
+					</div>
+					<div class="col-md-4">
+						<label class="form-label small" for="vaultCategoryFilter">Category</label>
+						<select class="form-select form-select-sm" id="vaultCategoryFilter">
+							<option value="">All categories</option>
+						</select>
+					</div>
+					<div class="col-md-4 d-flex align-items-end">
+						<button class="btn btn-sm btn-outline-secondary w-100" id="vaultClearFilters" type="button">Clear filters</button>
+					</div>
 					<div class="col-12">
 						<label class="form-label small" for="vaultTextFilter">Search</label>
-						<input class="form-control form-control-sm" id="vaultTextFilter" placeholder="Search mod name, version, source, or collection" type="search">
+						<input class="form-control form-control-sm" id="vaultTextFilter" placeholder="Search mod name, version, category, source, or collection" type="search">
 					</div>
 					<div class="col-12 small text-body-secondary">
 						Vault folder: <span class="vault-path user-select-text" id="vaultFolder"></span>
+						<button class="btn btn-link btn-sm py-0 align-baseline" id="vaultOpenFolder" type="button">Open folder</button>
 					</div>
 				</div>
 			</div>
@@ -106,6 +122,9 @@
 			</div>
 		</div>
 		<div class="mt-2 d-flex flex-wrap gap-1">
+			<template-var>typeBadges</template-var>
+			<template-var>categoryBadges</template-var>
+			<template-var>brandBadges</template-var>
 			<template-var>sourceBadges</template-var>
 			<template-var>collectionBadges</template-var>
 		</div>
@@ -117,6 +136,9 @@
 		</div>
 		<div class="collapse mt-2 vault-technical-details">
 			<div class="small vault-path user-select-text">Version labels seen: <template-var>versionLabels</template-var></div>
+			<div class="small vault-path user-select-text">ModHub IDs: <template-var>modHubIDs</template-var></div>
+			<div class="small vault-path user-select-text">ModHub versions: <template-var>modHubVersions</template-var></div>
+			<div class="small vault-path user-select-text">Game versions: <template-var>gameVersions</template-var></div>
 			<div class="small vault-path user-select-text">Path: <template-var>filePath</template-var></div>
 			<div class="small vault-path user-select-text">Fingerprint: <template-var>hash</template-var></div>
 		</div>

@@ -288,6 +288,7 @@ const pageAPI = {
 			all        : () => ipcRenderer.invoke('vault:all'),
 			context    : () => ipcRenderer.send('context:copy'),
 			dispatchUpdate : () => ipcRenderer.send('dispatch:update'),
+			importCollections : () => ipcRenderer.invoke('vault:importCollections'),
 			openFolder : () => ipcRenderer.invoke('vault:openFolder'),
 		},
 		validAsync : new Set(),
