@@ -913,6 +913,53 @@ function uniqueCleanArray(values) {
 	return [...new Set(values.filter((value) => typeof value === 'string' && value !== ''))]
 }
 
+function uniqueCleanNumberArray(values) {
+	return [...new Set(values.filter((value) => Number.isFinite(value)))]
+}
+
+function safeModArray(value) {
+	return Array.isArray(value) ? value.filter((entry) => typeof entry === 'string' && entry !== '') : []
+}
+
+function detectVaultModTypes(modRecord) {
+	const modTypes = []
+	const modDesc = modRecord?.modDesc ?? {}
+	const storeItems = Number.parseInt(modDesc.storeItems ?? 0, 10)
+	const scriptFiles = Number.parseInt(modDesc.scriptFiles ?? 0, 10)
+
+	if ( modDesc.mapConfigFile !== null && typeof modDesc.mapConfigFile !== 'undefined' ) { modTypes.push('Map') }
+	if ( storeItems > 0 ) { modTypes.push('Store item') }
+	if ( scriptFiles > 0 ) { modTypes.push(storeItems > 0 ? 'Scripted item' : 'Gameplay script') }
+	if ( modRecord?.fileDetail?.isFolder ) { modTypes.push('Folder mod') }
+	if ( modTypes.length === 0 ) { modTypes.push('Other') }
+
+	return modTypes
+}
+
+function collectionModVaultMetadata(modRecord, collectKey) {
+	const collectionName = serveIPC.modCollect.mapCollectionToName(collectKey) ?? collectKey
+	const sourceURL = serveIPC.storeSites.get(modRecord.fileDetail.shortName, null)
+	const modHubRecord = modRecord.modHub ?? {}
+
+	return {
+		collectionName,
+		fileName       : path.basename(modRecord.fileDetail.fullPath),
+		gameVersion    : modRecord.gameVersion,
+		itemBrands     : safeModArray(modRecord.has_brands),
+		itemCategories : safeModArray(modRecord.has_cats),
+		mapConfigFile  : modRecord.modDesc?.mapConfigFile ?? null,
+		modHubID       : modHubRecord.id ?? null,
+		modHubVersion  : modHubRecord.version ?? null,
+		modName        : modRecord.fileDetail.shortName,
+		modTypes       : detectVaultModTypes(modRecord),
+		scriptFiles    : Number.parseInt(modRecord.modDesc?.scriptFiles ?? 0, 10) || 0,
+		source         : 'Collection',
+		sourceURL,
+		storeItems     : Number.parseInt(modRecord.modDesc?.storeItems ?? 0, 10) || 0,
+		version        : modRecord.modDesc?.version ?? null,
+	}
+}
+
 async function sha256File(filePath) {
 	return new Promise((resolve, reject) => {
 		const hash = crypto.createHash('sha256')
@@ -961,10 +1008,19 @@ async function registerModLibraryFile(filePath, metadata = {}) {
 		collections : uniqueCleanArray([...(existingRecord.collections ?? []), metadata.collectionName]),
 		fileName    : existingRecord.fileName ?? fileName,
 		filePath    : libraryPath,
+		gameVersions : uniqueCleanNumberArray([...(existingRecord.gameVersions ?? []), metadata.gameVersion]),
+		itemBrands   : uniqueCleanArray([...(existingRecord.itemBrands ?? []), ...(metadata.itemBrands ?? [])]),
+		itemCategories : uniqueCleanArray([...(existingRecord.itemCategories ?? []), ...(metadata.itemCategories ?? [])]),
+		mapConfigFiles : uniqueCleanArray([...(existingRecord.mapConfigFiles ?? []), metadata.mapConfigFile]),
+		modHubIDs      : uniqueCleanArray([...(existingRecord.modHubIDs ?? []), metadata.modHubID === null || typeof metadata.modHubID === 'undefined' ? null : metadata.modHubID.toString()]),
+		modHubVersions : uniqueCleanArray([...(existingRecord.modHubVersions ?? []), metadata.modHubVersion]),
 		modNames    : uniqueCleanArray([...(existingRecord.modNames ?? []), metadata.modName]),
+		modTypes    : uniqueCleanArray([...(existingRecord.modTypes ?? []), ...(metadata.modTypes ?? [])]),
 		size        : fileStat.size,
+		scriptFiles : Math.max(existingRecord.scriptFiles ?? 0, metadata.scriptFiles ?? 0),
 		sources     : uniqueCleanArray([...(existingRecord.sources ?? []), metadata.source]),
 		sourceURL   : metadata.sourceURL ?? existingRecord.sourceURL ?? null,
+		storeItems  : Math.max(existingRecord.storeItems ?? 0, metadata.storeItems ?? 0),
 		updatedAt   : new Date().toISOString(),
 		versions    : uniqueCleanArray([...(existingRecord.versions ?? []), metadata.version]),
 	}
@@ -1009,12 +1065,21 @@ function getModLibrarySummary() {
 				fileExists   : fileExists,
 				fileName     : record.fileName ?? path.basename(record.filePath ?? ''),
 				filePath     : record.filePath ?? null,
+				gameVersions : Array.isArray(record.gameVersions) ? record.gameVersions : [],
 				hash         : record.hash ?? null,
+				itemBrands   : Array.isArray(record.itemBrands) ? record.itemBrands : [],
+				itemCategories : Array.isArray(record.itemCategories) ? record.itemCategories : [],
 				isUsed       : usedHashes.has(record.hash) || usedPaths.has(record.filePath),
+				mapConfigFiles : Array.isArray(record.mapConfigFiles) ? record.mapConfigFiles : [],
+				modHubIDs      : Array.isArray(record.modHubIDs) ? record.modHubIDs : [],
+				modHubVersions : Array.isArray(record.modHubVersions) ? record.modHubVersions : [],
 				modNames     : Array.isArray(record.modNames) ? record.modNames : [],
+				modTypes     : Array.isArray(record.modTypes) ? record.modTypes : [],
+				scriptFiles  : Number.isFinite(record.scriptFiles) ? record.scriptFiles : 0,
 				size         : size,
 				sources      : Array.isArray(record.sources) ? record.sources : [],
 				sourceURL    : record.sourceURL ?? null,
+				storeItems   : Number.isFinite(record.storeItems) ? record.storeItems : 0,
 				updatedAt    : record.updatedAt ?? null,
 				versions     : Array.isArray(record.versions) ? record.versions : [],
 			}
@@ -1027,6 +1092,47 @@ function getModLibrarySummary() {
 		totalCount : entries.length,
 		totalSize  : entries.reduce((sum, entry) => sum + entry.size, 0),
 		usedCount  : entries.filter((entry) => entry.isUsed).length,
+	}
+}
+
+async function importCollectionsToVault() {
+	let scanned = 0
+	let imported = 0
+	let skipped = 0
+	const errors = []
+
+	for ( const collectKey of serveIPC.modCollect.collections ) {
+		const mods = serveIPC.modCollect.getModListFromCollection(collectKey)
+		for ( const modRecord of mods ) {
+			scanned++
+			try {
+				if (
+					typeof modRecord?.fileDetail?.fullPath !== 'string' ||
+					modRecord.fileDetail.isFolder ||
+					!modRecord.fileDetail.fullPath.toLowerCase().endsWith('.zip') ||
+					!fs.existsSync(modRecord.fileDetail.fullPath)
+				) {
+					skipped++
+					continue
+				}
+				await registerModLibraryFile(modRecord.fileDetail.fullPath, collectionModVaultMetadata(modRecord, collectKey))
+				imported++
+			} catch (err) {
+				errors.push({
+					file  : modRecord?.fileDetail?.shortName ?? modRecord?.fileDetail?.fullPath ?? 'unknown',
+					error : err.message,
+				})
+			}
+		}
+	}
+
+	return {
+		errors,
+		imported,
+		ok : errors.length === 0,
+		scanned,
+		skipped,
+		summary : getModLibrarySummary(),
 	}
 }
 
@@ -1480,6 +1586,7 @@ ipcMain.handle('history:clear', () => {
 	return { ok : true }
 })
 ipcMain.handle('vault:all', () => getModLibrarySummary())
+ipcMain.handle('vault:importCollections', () => importCollectionsToVault())
 ipcMain.handle('vault:openFolder', () => shell.openPath(path.join(app.getPath('userData'), 'mod-library')))
 ipcMain.handle('history:rollbackEntry', async (_, entry) => {
 	try {

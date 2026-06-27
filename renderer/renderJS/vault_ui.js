@@ -73,8 +73,21 @@ function compareVaultEntries(left, right) {
 
 function badgeTooltip(value, type) {
 	switch ( type ) {
+		case 'brand' :
+			return `Brand or manufacturer found in the mod metadata: ${value}.`
+		case 'category' :
+			return `Store category found in the mod metadata: ${value}.`
 		case 'collection' :
 			return `This ZIP is associated with the "${value}" collection.`
+		case 'type' :
+			return {
+				'Folder mod'      : 'This mod was read from an unpacked folder.',
+				'Gameplay script' : 'This mod mainly adds scripts or gameplay behaviour rather than shop items.',
+				'Map'             : 'This mod contains map data.',
+				'Other'           : 'The vault does not yet have a clearer type for this mod.',
+				'Scripted item'   : 'This mod includes shop items and scripts.',
+				'Store item'      : 'This mod includes one or more in-game shop items.',
+			}[value] ?? `Mod type: ${value}.`
 		case 'source' :
 			return {
 				'Backed up from collection' : 'This ZIP was saved from one of your local mod collections.',
@@ -147,11 +160,17 @@ function groupEntries(entries) {
 		const sortedEntries = group.entries.toSorted(compareVaultEntries)
 		const versions = uniqueValues(group.entries.flatMap((entry) => entry.versions ?? []))
 		const collections = uniqueValues(group.entries.flatMap((entry) => entry.collections ?? []))
+		const categories = uniqueValues(group.entries.flatMap((entry) => entry.itemCategories ?? []))
+		const brands = uniqueValues(group.entries.flatMap((entry) => entry.itemBrands ?? []))
+		const modTypes = uniqueValues(group.entries.flatMap((entry) => entry.modTypes ?? []))
 		const sources = uniqueValues(group.entries.flatMap((entry) => entry.sources ?? []).map((source) => friendlySourceName(source)))
 		const searchText = normalValue([
 			group.modName,
 			versions.join(' '),
 			collections.join(' '),
+			categories.join(' '),
+			brands.join(' '),
+			modTypes.join(' '),
 			sources.join(' '),
 			group.entries.map((entry) => entry.fileName).join(' '),
 			group.entries.map((entry) => entry.sourceURL).join(' '),
@@ -159,8 +178,11 @@ function groupEntries(entries) {
 		].join(' '))
 		return {
 			...group,
+			brands,
+			categories,
 			collections,
 			entries : sortedEntries,
+			modTypes,
 			searchText,
 			sources,
 			totalSize : group.entries.reduce((sum, entry) => sum + (entry.size ?? 0), 0),
@@ -171,9 +193,14 @@ function groupEntries(entries) {
 
 function filterEntries() {
 	const textFilter = normalValue(MA.byId('vaultTextFilter').value)
+	const typeFilter = MA.byId('vaultTypeFilter').value
+	const categoryFilter = MA.byId('vaultCategoryFilter').value
 	const groups = groupEntries(vaultEntries)
-	if ( textFilter === '' ) { return groups }
-	return groups.filter((group) => group.searchText.includes(textFilter))
+	return groups.filter((group) =>
+		(textFilter === '' || group.searchText.includes(textFilter)) &&
+		(typeFilter === '' || group.modTypes.includes(typeFilter)) &&
+		(categoryFilter === '' || group.categories.includes(categoryFilter))
+	)
 }
 
 function versionLabel(entry) {
@@ -188,12 +215,18 @@ async function renderFileRows(entries, groupIndex) {
 		const detailsId = `vaultDetails_${groupIndex}_${entryIndex}`
 		const row = DATA.templateEngine('vault_file_row', {
 			collectionBadges : makeBadges(entry.collections ?? [], 'text-bg-secondary', 'collection'),
+			brandBadges      : makeBadges(entry.itemBrands ?? [], 'text-bg-dark', 'brand'),
+			categoryBadges   : makeBadges(entry.itemCategories ?? [], 'text-bg-info', 'category'),
 			fileName         : DATA.escapeSpecial(entry.fileName ?? ''),
 			filePath         : DATA.escapeSpecial(entry.filePath ?? ''),
+			gameVersions     : DATA.escapeSpecial((entry.gameVersions ?? []).join(', ') || 'unknown'),
 			hash             : DATA.escapeSpecial(entry.hash ?? ''),
 			missingBadge     : entry.fileExists ? '' : '<span class="badge text-bg-danger ms-1" data-bs-placement="top" data-bs-toggle="tooltip" title="The vault record exists, but the ZIP file could not be found on disk.">missing file</span>',
+			modHubIDs        : DATA.escapeSpecial((entry.modHubIDs ?? []).join(', ') || 'none'),
+			modHubVersions   : DATA.escapeSpecial((entry.modHubVersions ?? []).join(', ') || 'none'),
 			size             : DATA.escapeSpecial(size),
 			sourceBadges     : makeBadges(uniqueValues(entry.sources ?? []).map((source) => friendlySourceName(source)), 'text-bg-warning', 'source'),
+			typeBadges       : makeBadges(entry.modTypes ?? [], 'text-bg-primary', 'type'),
 			updatedAt        : DATA.escapeSpecial(formatTimestamp(entry.updatedAt)),
 			usedBadge        : entry.isUsed ?
 				'<span class="badge text-bg-success" data-bs-placement="top" data-bs-toggle="tooltip" title="At least one collection history entry still points to this ZIP.">referenced by history</span>' :
@@ -208,6 +241,26 @@ async function renderFileRows(entries, groupIndex) {
 	}))
 
 	return rows.join('')
+}
+
+function fillSelect(selectID, values, firstLabel) {
+	const select = MA.byId(selectID)
+	const currentValue = select.value
+	select.innerHTML = `<option value="">${DATA.escapeSpecial(firstLabel)}</option>`
+	for ( const value of values.toSorted((a, b) => a.localeCompare(b)) ) {
+		const option = document.createElement('option')
+		option.value = value
+		option.textContent = value
+		select.appendChild(option)
+	}
+	if ( values.includes(currentValue) ) {
+		select.value = currentValue
+	}
+}
+
+function refreshFilterOptions() {
+	fillSelect('vaultTypeFilter', uniqueValues(vaultEntries.flatMap((entry) => entry.modTypes ?? [])), 'All mod types')
+	fillSelect('vaultCategoryFilter', uniqueValues(vaultEntries.flatMap((entry) => entry.itemCategories ?? [])), 'All categories')
 }
 
 async function renderVault(groups) {
@@ -256,12 +309,47 @@ async function loadVault() {
 	MA.byIdText('vaultUsedCount', vault.usedCount.toString())
 	MA.byIdText('vaultSize', await DATA.bytesToHR(vault.totalSize))
 	MA.byIdText('vaultFolder', vault.folder)
+	refreshFilterOptions()
 	await renderVault(filterEntries())
+}
+
+async function importCollections() {
+	const button = MA.byId('vaultImportCollections')
+	button.disabled = true
+	const originalText = button.textContent
+	button.textContent = 'Scanning collections...'
+	MA.byIdText('vaultStatus', 'Scanning collections and adding unique ZIPs to the vault...')
+	try {
+		const result = await window.vault_IPC.importCollections()
+		vaultEntries = result.summary.entries
+		MA.byIdText('vaultCount', result.summary.totalCount.toString())
+		MA.byIdText('vaultUsedCount', result.summary.usedCount.toString())
+		MA.byIdText('vaultSize', await DATA.bytesToHR(result.summary.totalSize))
+		MA.byIdText('vaultFolder', result.summary.folder)
+		refreshFilterOptions()
+		await renderVault(filterEntries())
+		const errorText = result.errors.length === 0 ? '' : ` ${result.errors.length} item${result.errors.length === 1 ? '' : 's'} could not be added.`
+		MA.byIdText('vaultStatus', `Scanned ${result.scanned} collection mod${result.scanned === 1 ? '' : 's'} and updated ${result.imported} vault record${result.imported === 1 ? '' : 's'}.${errorText}`)
+	} catch (err) {
+		MA.byIdText('vaultStatus', `Vault scan failed: ${err.message}`)
+	} finally {
+		button.disabled = false
+		button.textContent = originalText
+	}
 }
 
 window.addEventListener('DOMContentLoaded', () => {
 	MA.byId('vaultList').addEventListener('contextmenu', window.vault_IPC.context)
 	MA.byId('vaultTextFilter').addEventListener('input', () => { renderVault(filterEntries()) })
+	MA.byId('vaultTypeFilter').addEventListener('change', () => { renderVault(filterEntries()) })
+	MA.byId('vaultCategoryFilter').addEventListener('change', () => { renderVault(filterEntries()) })
+	MA.byId('vaultClearFilters').addEventListener('click', () => {
+		MA.byId('vaultTextFilter').value = ''
+		MA.byId('vaultTypeFilter').value = ''
+		MA.byId('vaultCategoryFilter').value = ''
+		renderVault(filterEntries())
+	})
+	MA.byId('vaultImportCollections').addEventListener('click', importCollections)
 	MA.byId('vaultOpenFolder').addEventListener('click', () => { window.vault_IPC.openFolder() })
 	MA.byId('vaultBackToUpdates').addEventListener('click', () => { window.vault_IPC.dispatchUpdate() })
 	loadVault()
