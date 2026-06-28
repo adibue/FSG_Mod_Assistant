@@ -12,6 +12,7 @@ const fallbackLabels = {
 	history_action_update_applied     : 'Update applied',
 	history_action_update_rolled_back : 'Update rolled back',
 	history_action_update_staged      : 'Update staged',
+	history_action_vault_copied       : 'Copied from vault',
 	history_backup_saved              : 'Backup saved',
 	history_filter_all_actions        : 'All actions',
 	history_filter_all_collections    : 'All collections',
@@ -47,6 +48,7 @@ function actionLabelText(action) {
 	if ( action === 'update_applied' ) { return plainLabel('history_action_update_applied') }
 	if ( action === 'update_rolled_back' ) { return plainLabel('history_action_update_rolled_back') }
 	if ( action === 'update_staged' ) { return plainLabel('history_action_update_staged') }
+	if ( action === 'vault_copied' ) { return plainLabel('history_action_vault_copied') }
 	return action ?? ''
 }
 

@@ -286,10 +286,13 @@ const pageAPI = {
 	'vault' : {
 		functions : {
 			all        : () => ipcRenderer.invoke('vault:all'),
+			collections : () => ipcRenderer.invoke('vault:collections'),
 			context    : () => ipcRenderer.send('context:copy'),
+			copyToCollection : (payload) => ipcRenderer.invoke('vault:copyToCollection', payload),
 			dispatchUpdate : () => ipcRenderer.send('dispatch:update'),
 			importCollections : () => ipcRenderer.invoke('vault:importCollections'),
 			openFolder : () => ipcRenderer.invoke('vault:openFolder'),
+			refreshModHub : () => ipcRenderer.invoke('vault:refreshModHub'),
 		},
 		validAsync : new Set(),
 	},

@@ -22,6 +22,15 @@
 		.vault-group-body {
 			margin-left: 1.75rem;
 		}
+		.vault-mod-logo {
+			width: 4.25rem;
+			height: 4.25rem;
+			object-fit: contain;
+			background: rgba(0, 0, 0, 0.18);
+			border: 1px solid var(--bs-border-color);
+			border-radius: 0.5rem;
+			padding: 0.25rem;
+		}
 	</style>
 </head>
 <body data-bs-theme="dark" class="overflow-custom2">
@@ -58,6 +67,9 @@
 						<button class="btn btn-sm btn-success w-100" id="vaultImportCollections" type="button">Scan collections into vault</button>
 					</div>
 					<div class="col-md-3 d-flex align-items-end">
+						<button class="btn btn-sm btn-warning w-100" id="vaultRefreshModHub" type="button">Refresh ModHub categories</button>
+					</div>
+					<div class="col-md-3 d-flex align-items-end">
 						<button class="btn btn-sm btn-info w-100" id="vaultBackToUpdates" type="button">Back to updates</button>
 					</div>
 					<div class="col-md-4">
@@ -67,9 +79,15 @@
 						</select>
 					</div>
 					<div class="col-md-4">
+						<label class="form-label small" for="vaultModHubCategoryFilter">ModHub category</label>
+						<select class="form-select form-select-sm" id="vaultModHubCategoryFilter">
+							<option value="">All ModHub categories</option>
+						</select>
+					</div>
+					<div class="col-md-4">
 						<label class="form-label small" for="vaultCategoryFilter">Category</label>
 						<select class="form-select form-select-sm" id="vaultCategoryFilter">
-							<option value="">All categories</option>
+							<option value="">All internal categories</option>
 						</select>
 					</div>
 					<div class="col-md-4 d-flex align-items-end">
@@ -93,9 +111,12 @@
 <template id="vault_line">
 	<li class="list-group-item">
 		<div class="d-flex justify-content-between gap-3">
-			<div>
-				<div class="fw-bold fs-5"><template-var>modName</template-var></div>
-				<div class="small text-body-secondary"><template-var>fileCount</template-var></div>
+			<div class="d-flex gap-3 align-items-center">
+				<template-var>modIcon</template-var>
+				<div>
+					<div class="fw-bold fs-5"><template-var>modName</template-var></div>
+					<div class="small text-body-secondary"><template-var>fileCount</template-var></div>
+				</div>
 			</div>
 			<div class="text-end">
 				<div class="fw-bold"><template-var>totalSize</template-var></div>
@@ -110,7 +131,7 @@
 </template>
 
 <template id="vault_file_row">
-	<div class="border rounded p-2 mb-2">
+	<div class="border rounded p-2 mb-2 vault-file-row">
 		<div class="d-flex justify-content-between gap-2">
 			<div>
 				<div class="fw-bold"><template-var>versionLabel</template-var></div>
@@ -123,12 +144,24 @@
 		</div>
 		<div class="mt-2 d-flex flex-wrap gap-1">
 			<template-var>typeBadges</template-var>
+			<template-var>modHubCategoryBadges</template-var>
 			<template-var>categoryBadges</template-var>
 			<template-var>brandBadges</template-var>
 			<template-var>sourceBadges</template-var>
 			<template-var>collectionBadges</template-var>
 		</div>
 		<div class="small mt-2 text-body-secondary"><template-var>updatedAt</template-var></div>
+		<div class="row g-2 mt-2 align-items-center">
+			<div class="col-md-7">
+				<select class="form-select form-select-sm vault-copy-target"></select>
+			</div>
+			<div class="col-md-5">
+				<button class="btn btn-sm btn-success w-100 vault-copy-button" type="button">
+					Copy to collection
+				</button>
+			</div>
+		</div>
+		<div class="small mt-2 vault-copy-result" role="status"></div>
 		<div class="mt-2">
 			<button class="btn btn-sm btn-outline-secondary vault-details-toggle" type="button">
 				Technical details
@@ -136,6 +169,7 @@
 		</div>
 		<div class="collapse mt-2 vault-technical-details">
 			<div class="small vault-path user-select-text">Version labels seen: <template-var>versionLabels</template-var></div>
+			<div class="small vault-path user-select-text">ModHub categories: <template-var>modHubCategories</template-var></div>
 			<div class="small vault-path user-select-text">ModHub IDs: <template-var>modHubIDs</template-var></div>
 			<div class="small vault-path user-select-text">ModHub versions: <template-var>modHubVersions</template-var></div>
 			<div class="small vault-path user-select-text">Game versions: <template-var>gameVersions</template-var></div>
