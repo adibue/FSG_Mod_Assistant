@@ -7,6 +7,7 @@
 /* global bootstrap, DATA, MA */
 
 let vaultEntries = []
+let vaultCollections = []
 
 function uniqueValues(values) {
 	return [...new Set(values.filter((value) => typeof value === 'string' && value !== ''))]
@@ -79,6 +80,8 @@ function badgeTooltip(value, type) {
 			return `Store category found in the mod metadata: ${value}.`
 		case 'collection' :
 			return `This ZIP is associated with the "${value}" collection.`
+		case 'modhub-category' :
+			return `Category read from the official ModHub page: ${value}.`
 		case 'type' :
 			return {
 				'Folder mod'      : 'This mod was read from an unpacked folder.',
@@ -101,12 +104,21 @@ function badgeTooltip(value, type) {
 	}
 }
 
+function badgeLabel(value, type) {
+	switch ( type ) {
+		case 'modhub-category' :
+			return `ModHub: ${value}`
+		default :
+			return value
+	}
+}
+
 function makeBadges(values, badgeClass, type = '') {
 	return values
 		.filter((value) => typeof value === 'string' && value !== '')
 		.map((value) => {
 			const tooltip = DATA.escapeSpecial(badgeTooltip(value, type))
-			return `<span class="badge ${badgeClass}" data-bs-placement="top" data-bs-toggle="tooltip" title="${tooltip}">${DATA.escapeSpecial(value)}</span>`
+			return `<span class="badge ${badgeClass}" data-bs-placement="top" data-bs-toggle="tooltip" title="${tooltip}">${DATA.escapeSpecial(badgeLabel(value, type))}</span>`
 		})
 		.join('')
 }
@@ -134,6 +146,26 @@ function fragmentToHTML(fragment) {
 	return wrapper.innerHTML
 }
 
+function modIconHTML(icon) {
+	const iconSource = DATA.escapeSpecial(DATA.iconMaker(icon))
+	return `<img alt="" class="vault-mod-logo" src="${iconSource}">`
+}
+
+function fillCollectionSelect(select) {
+	select.innerHTML = ''
+	const placeholder = document.createElement('option')
+	placeholder.value = ''
+	placeholder.textContent = vaultCollections.length === 0 ? 'No collections found' : 'Choose collection...'
+	select.appendChild(placeholder)
+
+	for ( const collection of vaultCollections ) {
+		const option = document.createElement('option')
+		option.value = collection.key
+		option.textContent = collection.name
+		select.appendChild(option)
+	}
+}
+
 function enableTooltips(parent) {
 	for ( const element of parent.querySelectorAll('[data-bs-toggle="tooltip"]') ) {
 		new bootstrap.Tooltip(element)
@@ -158,10 +190,12 @@ function groupEntries(entries) {
 
 	return [...groups.values()].map((group) => {
 		const sortedEntries = group.entries.toSorted(compareVaultEntries)
+		const modIcon = sortedEntries.find((entry) => typeof entry.modIcon === 'string' && entry.modIcon !== '')?.modIcon ?? null
 		const versions = uniqueValues(group.entries.flatMap((entry) => entry.versions ?? []))
 		const collections = uniqueValues(group.entries.flatMap((entry) => entry.collections ?? []))
 		const categories = uniqueValues(group.entries.flatMap((entry) => entry.itemCategories ?? []))
 		const brands = uniqueValues(group.entries.flatMap((entry) => entry.itemBrands ?? []))
+		const modHubCategories = uniqueValues(group.entries.flatMap((entry) => entry.modHubCategories ?? []))
 		const modTypes = uniqueValues(group.entries.flatMap((entry) => entry.modTypes ?? []))
 		const sources = uniqueValues(group.entries.flatMap((entry) => entry.sources ?? []).map((source) => friendlySourceName(source)))
 		const searchText = normalValue([
@@ -170,6 +204,7 @@ function groupEntries(entries) {
 			collections.join(' '),
 			categories.join(' '),
 			brands.join(' '),
+			modHubCategories.join(' '),
 			modTypes.join(' '),
 			sources.join(' '),
 			group.entries.map((entry) => entry.fileName).join(' '),
@@ -182,6 +217,8 @@ function groupEntries(entries) {
 			categories,
 			collections,
 			entries : sortedEntries,
+			modIcon,
+			modHubCategories,
 			modTypes,
 			searchText,
 			sources,
@@ -195,11 +232,13 @@ function filterEntries() {
 	const textFilter = normalValue(MA.byId('vaultTextFilter').value)
 	const typeFilter = MA.byId('vaultTypeFilter').value
 	const categoryFilter = MA.byId('vaultCategoryFilter').value
+	const modHubCategoryFilter = MA.byId('vaultModHubCategoryFilter').value
 	const groups = groupEntries(vaultEntries)
 	return groups.filter((group) =>
 		(textFilter === '' || group.searchText.includes(textFilter)) &&
 		(typeFilter === '' || group.modTypes.includes(typeFilter)) &&
-		(categoryFilter === '' || group.categories.includes(categoryFilter))
+		(categoryFilter === '' || group.categories.includes(categoryFilter)) &&
+		(modHubCategoryFilter === '' || group.modHubCategories.includes(modHubCategoryFilter))
 	)
 }
 
@@ -222,6 +261,8 @@ async function renderFileRows(entries, groupIndex) {
 			gameVersions     : DATA.escapeSpecial((entry.gameVersions ?? []).join(', ') || 'unknown'),
 			hash             : DATA.escapeSpecial(entry.hash ?? ''),
 			missingBadge     : entry.fileExists ? '' : '<span class="badge text-bg-danger ms-1" data-bs-placement="top" data-bs-toggle="tooltip" title="The vault record exists, but the ZIP file could not be found on disk.">missing file</span>',
+			modHubCategories : DATA.escapeSpecial((entry.modHubCategories ?? []).join(', ') || 'none'),
+			modHubCategoryBadges : makeBadges(entry.modHubCategories ?? [], 'text-bg-success', 'modhub-category'),
 			modHubIDs        : DATA.escapeSpecial((entry.modHubIDs ?? []).join(', ') || 'none'),
 			modHubVersions   : DATA.escapeSpecial((entry.modHubVersions ?? []).join(', ') || 'none'),
 			size             : DATA.escapeSpecial(size),
@@ -237,6 +278,8 @@ async function renderFileRows(entries, groupIndex) {
 		row.querySelector('.vault-details-toggle').setAttribute('data-bs-toggle', 'collapse')
 		row.querySelector('.vault-details-toggle').setAttribute('data-bs-target', `#${detailsId}`)
 		row.querySelector('.vault-technical-details').id = detailsId
+		row.querySelector('.vault-copy-button').dataset.hash = entry.hash ?? ''
+		fillCollectionSelect(row.querySelector('.vault-copy-target'))
 		return fragmentToHTML(row)
 	}))
 
@@ -260,7 +303,8 @@ function fillSelect(selectID, values, firstLabel) {
 
 function refreshFilterOptions() {
 	fillSelect('vaultTypeFilter', uniqueValues(vaultEntries.flatMap((entry) => entry.modTypes ?? [])), 'All mod types')
-	fillSelect('vaultCategoryFilter', uniqueValues(vaultEntries.flatMap((entry) => entry.itemCategories ?? [])), 'All categories')
+	fillSelect('vaultCategoryFilter', uniqueValues(vaultEntries.flatMap((entry) => entry.itemCategories ?? [])), 'All internal categories')
+	fillSelect('vaultModHubCategoryFilter', uniqueValues(vaultEntries.flatMap((entry) => entry.modHubCategories ?? [])), 'All ModHub categories')
 }
 
 async function renderVault(groups) {
@@ -286,6 +330,7 @@ async function renderVault(groups) {
 		const node = DATA.templateEngine('vault_line', {
 			fileCount      : DATA.escapeSpecial(`${group.entries.length} stored ZIP file${group.entries.length === 1 ? '' : 's'}`),
 			fileRows       : await renderFileRows(group.entries, groupIndex),
+			modIcon        : modIconHTML(group.modIcon),
 			modName        : DATA.escapeSpecial(group.modName),
 			totalSize      : DATA.escapeSpecial(totalSize),
 			versionSummary : DATA.escapeSpecial(versionText),
@@ -303,14 +348,73 @@ async function renderVault(groups) {
 }
 
 async function loadVault() {
-	const vault = await window.vault_IPC.all()
+	const [vault, collections] = await Promise.all([
+		window.vault_IPC.all(),
+		window.vault_IPC.collections(),
+	])
 	vaultEntries = vault.entries
+	vaultCollections = collections
 	MA.byIdText('vaultCount', vault.totalCount.toString())
 	MA.byIdText('vaultUsedCount', vault.usedCount.toString())
 	MA.byIdText('vaultSize', await DATA.bytesToHR(vault.totalSize))
 	MA.byIdText('vaultFolder', vault.folder)
 	refreshFilterOptions()
 	await renderVault(filterEntries())
+}
+
+async function copyVaultEntry(button) {
+	const row = button.closest('.vault-file-row')
+	const select = row?.querySelector('.vault-copy-target')
+	const rowStatus = row?.querySelector('.vault-copy-result')
+	const collectionKey = select?.value ?? ''
+	if ( collectionKey === '' ) {
+		const message = 'Choose a collection before copying from the vault.'
+		MA.byIdText('vaultStatus', message)
+		if ( rowStatus !== null ) { rowStatus.textContent = message }
+		return
+	}
+
+	const originalText = button.textContent
+	button.disabled = true
+	button.textContent = 'Copying...'
+	if ( rowStatus !== null ) { rowStatus.textContent = 'Copying ZIP to the selected collection...' }
+	const hash = button.dataset.hash
+
+	try {
+		let result = await window.vault_IPC.copyToCollection({ collectionKey, hash, overwrite : false })
+		if ( result.needsOverwrite ) {
+			const confirmed = confirm(`${result.fileName} already exists in ${result.collectionName}. Replace it and save a backup first?`)
+			if ( !confirmed ) {
+				const message = 'Copy cancelled. Nothing was changed.'
+				MA.byIdText('vaultStatus', message)
+				if ( rowStatus !== null ) { rowStatus.textContent = message }
+				return
+			}
+			result = await window.vault_IPC.copyToCollection({ collectionKey, hash, overwrite : true })
+		}
+
+		if ( !result.ok ) {
+			const message = `Vault copy failed: ${result.error ?? 'Unknown error'}`
+			MA.byIdText('vaultStatus', message)
+			if ( rowStatus !== null ) { rowStatus.textContent = message }
+			return
+		}
+
+		const backupText = result.replacedExisting ? ' Existing copy was backed up first.' : ''
+		const message = `Copied ${result.fileName} to ${result.collectionName}.${backupText}`
+		MA.byIdText('vaultStatus', message)
+		if ( rowStatus !== null ) {
+			rowStatus.classList.add('text-success')
+			rowStatus.textContent = message
+		}
+	} catch (err) {
+		const message = `Vault copy failed: ${err.message}`
+		MA.byIdText('vaultStatus', message)
+		if ( rowStatus !== null ) { rowStatus.textContent = message }
+	} finally {
+		button.disabled = false
+		button.textContent = originalText
+	}
 }
 
 async function importCollections() {
@@ -322,6 +426,7 @@ async function importCollections() {
 	try {
 		const result = await window.vault_IPC.importCollections()
 		vaultEntries = result.summary.entries
+		vaultCollections = await window.vault_IPC.collections()
 		MA.byIdText('vaultCount', result.summary.totalCount.toString())
 		MA.byIdText('vaultUsedCount', result.summary.usedCount.toString())
 		MA.byIdText('vaultSize', await DATA.bytesToHR(result.summary.totalSize))
@@ -338,18 +443,51 @@ async function importCollections() {
 	}
 }
 
+async function refreshModHubCategories() {
+	const button = MA.byId('vaultRefreshModHub')
+	button.disabled = true
+	const originalText = button.textContent
+	button.textContent = 'Refreshing ModHub...'
+	MA.byIdText('vaultStatus', 'Reading ModHub category data for vaulted mods. This may take a little while...')
+	try {
+		const result = await window.vault_IPC.refreshModHub()
+		vaultEntries = result.summary.entries
+		MA.byIdText('vaultCount', result.summary.totalCount.toString())
+		MA.byIdText('vaultUsedCount', result.summary.usedCount.toString())
+		MA.byIdText('vaultSize', await DATA.bytesToHR(result.summary.totalSize))
+		MA.byIdText('vaultFolder', result.summary.folder)
+		refreshFilterOptions()
+		await renderVault(filterEntries())
+		const errorText = result.errors.length === 0 ? '' : ` ${result.errors.length} ModHub page${result.errors.length === 1 ? '' : 's'} could not be read.`
+		const emptyText = result.scanned === 0 ? ' No ModHub IDs were found in the vault yet; scan collections into the vault first, then refresh ModHub categories.' : ''
+		MA.byIdText('vaultStatus', `Checked ${result.scanned} ModHub-linked vault record${result.scanned === 1 ? '' : 's'} and refreshed ${result.refreshed} categor${result.refreshed === 1 ? 'y' : 'ies'}.${errorText}${emptyText}`)
+	} catch (err) {
+		MA.byIdText('vaultStatus', `ModHub category refresh failed: ${err.message}`)
+	} finally {
+		button.disabled = false
+		button.textContent = originalText
+	}
+}
+
 window.addEventListener('DOMContentLoaded', () => {
 	MA.byId('vaultList').addEventListener('contextmenu', window.vault_IPC.context)
+	MA.byId('vaultList').addEventListener('click', (event) => {
+		const button = event.target.closest('.vault-copy-button')
+		if ( button !== null ) { copyVaultEntry(button) }
+	})
 	MA.byId('vaultTextFilter').addEventListener('input', () => { renderVault(filterEntries()) })
 	MA.byId('vaultTypeFilter').addEventListener('change', () => { renderVault(filterEntries()) })
 	MA.byId('vaultCategoryFilter').addEventListener('change', () => { renderVault(filterEntries()) })
+	MA.byId('vaultModHubCategoryFilter').addEventListener('change', () => { renderVault(filterEntries()) })
 	MA.byId('vaultClearFilters').addEventListener('click', () => {
 		MA.byId('vaultTextFilter').value = ''
 		MA.byId('vaultTypeFilter').value = ''
 		MA.byId('vaultCategoryFilter').value = ''
+		MA.byId('vaultModHubCategoryFilter').value = ''
 		renderVault(filterEntries())
 	})
 	MA.byId('vaultImportCollections').addEventListener('click', importCollections)
+	MA.byId('vaultRefreshModHub').addEventListener('click', refreshModHubCategories)
 	MA.byId('vaultOpenFolder').addEventListener('click', () => { window.vault_IPC.openFolder() })
 	MA.byId('vaultBackToUpdates').addEventListener('click', () => { window.vault_IPC.dispatchUpdate() })
 	loadVault()
