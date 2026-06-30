@@ -916,7 +916,7 @@ function decodeHTMLEntities(value) {
 		.replaceAll('&lt;', '<')
 		.replaceAll('&gt;', '>')
 		.replaceAll('&quot;', '"')
-		.replaceAll('&#039;', "'")
+		.replaceAll('&#039;', '\'')
 		.replaceAll('&nbsp;', ' ')
 }
 
@@ -947,6 +947,7 @@ function detectVaultModTypes(modRecord) {
 	return modTypes
 }
 
+// eslint-disable-next-line complexity
 function collectionModVaultMetadata(modRecord, collectKey) {
 	const collectionName = serveIPC.modCollect.mapCollectionToName(collectKey) ?? collectKey
 	const sourceURL = serveIPC.storeSites.get(modRecord.fileDetail.shortName, null)
@@ -1072,6 +1073,7 @@ function modLibraryFilePath(hash, fileName) {
 	return path.join(app.getPath('userData'), 'mod-library', 'files', hash.slice(0, 2), `${hash}${ext}`)
 }
 
+// eslint-disable-next-line complexity
 async function registerModLibraryFile(filePath, metadata = {}) {
 	if ( typeof filePath !== 'string' || !fs.existsSync(filePath) ) {
 		throw new Error('Library source file was not found')
@@ -1117,8 +1119,8 @@ async function registerModLibraryFile(filePath, metadata = {}) {
 		modIcon     : metadata.modIcon ?? existingRecord.modIcon ?? null,
 		modNames    : uniqueCleanArray([...(existingRecord.modNames ?? []), metadata.modName]),
 		modTypes    : uniqueCleanArray([...(existingRecord.modTypes ?? []), ...(metadata.modTypes ?? [])]),
-		size        : fileStat.size,
 		scriptFiles : Math.max(existingRecord.scriptFiles ?? 0, metadata.scriptFiles ?? 0),
+		size        : fileStat.size,
 		sources     : uniqueCleanArray([...(existingRecord.sources ?? []), metadata.source]),
 		sourceURL   : metadata.sourceURL ?? existingRecord.sourceURL ?? null,
 		storeItems  : Math.max(existingRecord.storeItems ?? 0, metadata.storeItems ?? 0),
@@ -1151,12 +1153,49 @@ function findCachedModLibraryFile(metadata = {}) {
 	}) ?? null
 }
 
+function vaultNoteKey(modName) {
+	if ( typeof modName !== 'string' ) { return '' }
+	return modName.trim().toLocaleLowerCase()
+}
+
+function getVaultNotes() {
+	const storedNotes = serveIPC.storeLibrary.get('notes', {})
+	return typeof storedNotes === 'object' && storedNotes !== null && !Array.isArray(storedNotes) ? storedNotes : {}
+}
+
+function saveVaultNote({ modName, note } = {}) {
+	const noteKey = vaultNoteKey(modName)
+	if ( noteKey === '' ) { throw new Error('The mod name is missing.') }
+	if ( typeof note !== 'string' ) { throw new Error('The note is invalid.') }
+
+	const cleanNote = note.trim()
+	if ( cleanNote.length > 5000 ) { throw new Error('Notes cannot be longer than 5,000 characters.') }
+
+	const notes = getVaultNotes()
+	if ( cleanNote === '' ) {
+		delete notes[noteKey]
+	} else {
+		notes[noteKey] = {
+			modName,
+			note      : cleanNote,
+			updatedAt : new Date().toISOString(),
+		}
+	}
+	serveIPC.storeLibrary.set('notes', notes)
+
+	return {
+		key    : noteKey,
+		record : notes[noteKey] ?? null,
+	}
+}
+
 function getModLibrarySummary() {
 	const records = serveIPC.storeLibrary.get('records', {})
 	const historyEntries = serveIPC.storeHistory.get('entries', [])
 	const usedHashes = new Set(historyEntries.flatMap((entry) => [entry.backupHash, entry.currentHash]).filter((value) => typeof value === 'string'))
 	const usedPaths = new Set(historyEntries.flatMap((entry) => [entry.backupPath, entry.currentLibraryPath]).filter((value) => typeof value === 'string'))
 	const entries = Object.entries(records)
+		// eslint-disable-next-line complexity
 		.map(([recordHash, record]) => {
 			const fileExists = typeof record?.filePath === 'string' && fs.existsSync(record.filePath)
 			const size = fileExists ? fs.statSync(record.filePath).size : (record.size ?? 0)
@@ -1168,9 +1207,9 @@ function getModLibrarySummary() {
 				filePath     : record.filePath ?? null,
 				gameVersions : Array.isArray(record.gameVersions) ? record.gameVersions : [],
 				hash         : record.hash ?? recordHash,
+				isUsed       : usedHashes.has(record.hash ?? recordHash) || usedPaths.has(record.filePath),
 				itemBrands   : Array.isArray(record.itemBrands) ? record.itemBrands : [],
 				itemCategories : Array.isArray(record.itemCategories) ? record.itemCategories : [],
-				isUsed       : usedHashes.has(record.hash ?? recordHash) || usedPaths.has(record.filePath),
 				mapConfigFiles : Array.isArray(record.mapConfigFiles) ? record.mapConfigFiles : [],
 				modHubCategories : Array.isArray(record.modHubCategories) ? record.modHubCategories : [],
 				modHubCategoryPaths : Array.isArray(record.modHubCategoryPaths) ? record.modHubCategoryPaths : [],
@@ -1193,6 +1232,7 @@ function getModLibrarySummary() {
 	return {
 		entries,
 		folder     : path.join(app.getPath('userData'), 'mod-library'),
+		notes      : getVaultNotes(),
 		totalCount : entries.length,
 		totalSize  : entries.reduce((sum, entry) => sum + entry.size, 0),
 		usedCount  : entries.filter((entry) => entry.isUsed).length,
@@ -1215,6 +1255,7 @@ async function getVaultCollections() {
 		.sort((a, b) => a.name.localeCompare(b.name))
 }
 
+// eslint-disable-next-line complexity
 async function copyVaultRecordToCollection({ collectionKey, hash, overwrite = false } = {}) {
 	if ( typeof hash !== 'string' || hash === '' ) { throw new Error('No vault ZIP was selected.') }
 	if ( typeof collectionKey !== 'string' || collectionKey === '' ) { throw new Error('No collection was selected.') }
@@ -1318,6 +1359,8 @@ async function importCollectionsToVault() {
 					skipped++
 					continue
 				}
+				// Keep large ZIP hashing sequential to avoid excessive disk and memory pressure.
+				// eslint-disable-next-line no-await-in-loop
 				await registerModLibraryFile(modRecord.fileDetail.fullPath, collectionModVaultMetadata(modRecord, collectKey))
 				imported++
 			} catch (err) {
@@ -1346,6 +1389,8 @@ async function refreshVaultModHubMetadata() {
 	const errors = []
 
 	for ( const modHubID of modHubIDs ) {
+		// Read ModHub pages sequentially to avoid hammering the service.
+		// eslint-disable-next-line no-await-in-loop
 		const metadata = await fetchModHubMetadata(modHubID, { force : true })
 		if ( metadata?.ok ) {
 			refreshed++
@@ -1846,6 +1891,13 @@ ipcMain.handle('vault:copyToCollection', async (_, payload) => {
 ipcMain.handle('vault:importCollections', () => importCollectionsToVault())
 ipcMain.handle('vault:openFolder', () => shell.openPath(path.join(app.getPath('userData'), 'mod-library')))
 ipcMain.handle('vault:refreshModHub', () => refreshVaultModHubMetadata())
+ipcMain.handle('vault:saveNote', async (_, payload) => {
+	try {
+		return { ok : true, ...saveVaultNote(payload) }
+	} catch (err) {
+		return { ok : false, error : err.message }
+	}
+})
 ipcMain.handle('history:rollbackEntry', async (_, entry) => {
 	try {
 		const backupFolder = path.join(app.getPath('userData'), 'update-backups')

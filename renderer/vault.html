@@ -31,6 +31,11 @@
 			border-radius: 0.5rem;
 			padding: 0.25rem;
 		}
+		.vault-note-preview {
+			max-height: 4.5em;
+			overflow: hidden;
+			white-space: pre-wrap;
+		}
 	</style>
 </head>
 <body data-bs-theme="dark" class="overflow-custom2">
@@ -95,7 +100,7 @@
 					</div>
 					<div class="col-12">
 						<label class="form-label small" for="vaultTextFilter">Search</label>
-						<input class="form-control form-control-sm" id="vaultTextFilter" placeholder="Search mod name, version, category, source, or collection" type="search">
+						<input class="form-control form-control-sm" id="vaultTextFilter" placeholder="Search mod name, version, category, source, collection, or notes" type="search">
 					</div>
 					<div class="col-12 small text-body-secondary">
 						Vault folder: <span class="vault-path user-select-text" id="vaultFolder"></span>
@@ -109,13 +114,17 @@
 	</div>
 
 <template id="vault_line">
-	<li class="list-group-item">
+	<li class="list-group-item vault-group-row">
 		<div class="d-flex justify-content-between gap-3">
 			<div class="d-flex gap-3 align-items-center">
 				<template-var>modIcon</template-var>
 				<div>
-					<div class="fw-bold fs-5"><template-var>modName</template-var></div>
+					<div class="fw-bold fs-5">
+						<template-var>modName</template-var>
+						<span class="badge text-bg-warning d-none vault-note-badge">Note</span>
+					</div>
 					<div class="small text-body-secondary"><template-var>fileCount</template-var></div>
+					<div class="small text-warning mt-1 d-none vault-note-preview"></div>
 				</div>
 			</div>
 			<div class="text-end">
@@ -123,9 +132,19 @@
 				<div class="small text-body-secondary"><template-var>versionSummary</template-var></div>
 			</div>
 		</div>
-		<button class="btn btn-sm btn-outline-info mt-3 vault-group-toggle" type="button">
-			Show stored ZIPs
-		</button>
+		<div class="d-flex flex-wrap gap-2 mt-3">
+			<button class="btn btn-sm btn-outline-info vault-group-toggle" type="button">Show stored ZIPs</button>
+			<button class="btn btn-sm btn-outline-warning vault-note-toggle" type="button">Add note</button>
+		</div>
+		<div class="collapse mt-3 vault-note-panel">
+			<label class="form-label small">Mod note</label>
+			<textarea class="form-control vault-note-input" maxlength="5000" placeholder="Record conflicts, setup reminders, or anything else worth remembering." rows="3"></textarea>
+			<div class="d-flex gap-2 mt-2">
+				<button class="btn btn-sm btn-warning vault-note-save" type="button">Save note</button>
+				<button class="btn btn-sm btn-outline-danger vault-note-clear" type="button">Clear note</button>
+			</div>
+			<div class="small mt-2 vault-note-status" role="status"></div>
+		</div>
 		<div class="collapse mt-3 vault-group-body"><template-var>fileRows</template-var></div>
 	</li>
 </template>

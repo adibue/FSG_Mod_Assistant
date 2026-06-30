@@ -293,6 +293,7 @@ const pageAPI = {
 			importCollections : () => ipcRenderer.invoke('vault:importCollections'),
 			openFolder : () => ipcRenderer.invoke('vault:openFolder'),
 			refreshModHub : () => ipcRenderer.invoke('vault:refreshModHub'),
+			saveNote   : (payload) => ipcRenderer.invoke('vault:saveNote', payload),
 		},
 		validAsync : new Set(),
 	},

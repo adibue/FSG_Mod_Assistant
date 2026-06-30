@@ -8,6 +8,7 @@
 
 let vaultEntries = []
 let vaultCollections = []
+let vaultNotes = {}
 
 function uniqueValues(values) {
 	return [...new Set(values.filter((value) => typeof value === 'string' && value !== ''))]
@@ -21,6 +22,15 @@ function formatTimestamp(timestamp) {
 
 function normalValue(value) {
 	return (value ?? '').toString().toLowerCase()
+}
+
+function vaultNoteKey(modName) {
+	return (modName ?? '').toString().trim().toLocaleLowerCase()
+}
+
+function setButtonState(button, disabled, text) {
+	button.disabled = disabled
+	button.textContent = text
 }
 
 function sortTime(entry) {
@@ -198,8 +208,10 @@ function groupEntries(entries) {
 		const modHubCategories = uniqueValues(group.entries.flatMap((entry) => entry.modHubCategories ?? []))
 		const modTypes = uniqueValues(group.entries.flatMap((entry) => entry.modTypes ?? []))
 		const sources = uniqueValues(group.entries.flatMap((entry) => entry.sources ?? []).map((source) => friendlySourceName(source)))
+		const note = vaultNotes[vaultNoteKey(group.modName)]?.note ?? ''
 		const searchText = normalValue([
 			group.modName,
+			note,
 			versions.join(' '),
 			collections.join(' '),
 			categories.join(' '),
@@ -217,9 +229,10 @@ function groupEntries(entries) {
 			categories,
 			collections,
 			entries : sortedEntries,
-			modIcon,
 			modHubCategories,
+			modIcon,
 			modTypes,
+			note,
 			searchText,
 			sources,
 			totalSize : group.entries.reduce((sum, entry) => sum + (entry.size ?? 0), 0),
@@ -249,13 +262,14 @@ function versionLabel(entry) {
 }
 
 async function renderFileRows(entries, groupIndex) {
+	// eslint-disable-next-line complexity
 	const rows = await Promise.all(entries.map(async (entry, entryIndex) => {
 		const size = await DATA.bytesToHR(entry.size ?? 0)
 		const detailsId = `vaultDetails_${groupIndex}_${entryIndex}`
 		const row = DATA.templateEngine('vault_file_row', {
-			collectionBadges : makeBadges(entry.collections ?? [], 'text-bg-secondary', 'collection'),
 			brandBadges      : makeBadges(entry.itemBrands ?? [], 'text-bg-dark', 'brand'),
 			categoryBadges   : makeBadges(entry.itemCategories ?? [], 'text-bg-info', 'category'),
+			collectionBadges : makeBadges(entry.collections ?? [], 'text-bg-secondary', 'collection'),
 			fileName         : DATA.escapeSpecial(entry.fileName ?? ''),
 			filePath         : DATA.escapeSpecial(entry.filePath ?? ''),
 			gameVersions     : DATA.escapeSpecial((entry.gameVersions ?? []).join(', ') || 'unknown'),
@@ -324,6 +338,7 @@ async function renderVault(groups) {
 	const nodes = await Promise.all(groups.map(async (group, groupIndex) => {
 		const totalSize = await DATA.bytesToHR(group.totalSize)
 		const groupBodyId = `vaultGroup_${groupIndex}`
+		const noteBodyId = `vaultNote_${groupIndex}`
 		const versionText = group.versions.length === 0 ?
 			'No version metadata recorded' :
 			`${group.versions.length} version label${group.versions.length === 1 ? '' : 's'} recorded`
@@ -338,6 +353,26 @@ async function renderVault(groups) {
 		node.querySelector('.vault-group-toggle').setAttribute('data-bs-toggle', 'collapse')
 		node.querySelector('.vault-group-toggle').setAttribute('data-bs-target', `#${groupBodyId}`)
 		node.querySelector('.vault-group-body').id = groupBodyId
+		const noteToggle = node.querySelector('.vault-note-toggle')
+		const notePanel = node.querySelector('.vault-note-panel')
+		const noteInput = node.querySelector('.vault-note-input')
+		const notePreview = node.querySelector('.vault-note-preview')
+		const noteBadge = node.querySelector('.vault-note-badge')
+		noteToggle.setAttribute('data-bs-toggle', 'collapse')
+		noteToggle.setAttribute('data-bs-target', `#${noteBodyId}`)
+		noteToggle.textContent = group.note === '' ? 'Add note' : 'Edit note'
+		notePanel.id = noteBodyId
+		noteInput.value = group.note
+		notePreview.textContent = group.note
+		for ( const button of node.querySelectorAll('.vault-note-save, .vault-note-clear') ) {
+			button.dataset.modName = group.modName
+		}
+		if ( group.note !== '' ) {
+			noteBadge.classList.remove('d-none')
+			notePreview.classList.remove('d-none')
+		} else {
+			node.querySelector('.vault-note-clear').disabled = true
+		}
 		return node
 	}))
 
@@ -354,12 +389,59 @@ async function loadVault() {
 	])
 	vaultEntries = vault.entries
 	vaultCollections = collections
+	vaultNotes = vault.notes ?? {}
 	MA.byIdText('vaultCount', vault.totalCount.toString())
 	MA.byIdText('vaultUsedCount', vault.usedCount.toString())
 	MA.byIdText('vaultSize', await DATA.bytesToHR(vault.totalSize))
 	MA.byIdText('vaultFolder', vault.folder)
 	refreshFilterOptions()
 	await renderVault(filterEntries())
+}
+
+// eslint-disable-next-line complexity
+async function saveVaultNote(button, shouldClear = false) {
+	const group = button.closest('.vault-group-row')
+	const input = group?.querySelector('.vault-note-input')
+	const modName = button.dataset.modName ?? ''
+	if ( group === null || input === null || modName === '' ) { return }
+
+	if ( shouldClear && input.value.trim() !== '' && !confirm(`Clear the note for ${modName}?`) ) { return }
+
+	const note = shouldClear ? '' : input.value
+	const originalText = button.textContent
+	setButtonState(button, true, shouldClear ? 'Clearing...' : 'Saving...')
+
+	try {
+		const result = await window.vault_IPC.saveNote({ modName, note })
+		if ( !result.ok ) {
+			group.querySelector('.vault-note-status').textContent = `Note could not be saved: ${result.error ?? 'Unknown error'}`
+			return
+		}
+
+		if ( result.record === null ) {
+			delete vaultNotes[result.key]
+		} else {
+			vaultNotes[result.key] = result.record
+		}
+
+		const savedNote = result.record?.note ?? ''
+		const preview = group.querySelector('.vault-note-preview')
+		const badge = group.querySelector('.vault-note-badge')
+		const toggle = group.querySelector('.vault-note-toggle')
+		const clearButton = group.querySelector('.vault-note-clear')
+		input.value = savedNote
+		preview.textContent = savedNote
+		preview.classList.toggle('d-none', savedNote === '')
+		badge.classList.toggle('d-none', savedNote === '')
+		toggle.textContent = savedNote === '' ? 'Add note' : 'Edit note'
+		clearButton.disabled = savedNote === ''
+		group.querySelector('.vault-note-status').textContent = savedNote === '' ? 'Note cleared.' : 'Note saved.'
+		MA.byIdText('vaultStatus', savedNote === '' ? `Cleared the note for ${modName}.` : `Saved the note for ${modName}.`)
+	} catch (err) {
+		group.querySelector('.vault-note-status').textContent = `Note could not be saved: ${err.message}`
+	} finally {
+		setButtonState(button, shouldClear && input.value.trim() === '', originalText)
+	}
 }
 
 async function copyVaultEntry(button) {
@@ -375,8 +457,7 @@ async function copyVaultEntry(button) {
 	}
 
 	const originalText = button.textContent
-	button.disabled = true
-	button.textContent = 'Copying...'
+	setButtonState(button, true, 'Copying...')
 	if ( rowStatus !== null ) { rowStatus.textContent = 'Copying ZIP to the selected collection...' }
 	const hash = button.dataset.hash
 
@@ -412,8 +493,7 @@ async function copyVaultEntry(button) {
 		MA.byIdText('vaultStatus', message)
 		if ( rowStatus !== null ) { rowStatus.textContent = message }
 	} finally {
-		button.disabled = false
-		button.textContent = originalText
+		setButtonState(button, false, originalText)
 	}
 }
 
@@ -472,8 +552,12 @@ async function refreshModHubCategories() {
 window.addEventListener('DOMContentLoaded', () => {
 	MA.byId('vaultList').addEventListener('contextmenu', window.vault_IPC.context)
 	MA.byId('vaultList').addEventListener('click', (event) => {
-		const button = event.target.closest('.vault-copy-button')
-		if ( button !== null ) { copyVaultEntry(button) }
+		const copyButton = event.target.closest('.vault-copy-button')
+		if ( copyButton !== null ) { copyVaultEntry(copyButton) }
+		const saveNoteButton = event.target.closest('.vault-note-save')
+		if ( saveNoteButton !== null ) { saveVaultNote(saveNoteButton) }
+		const clearNoteButton = event.target.closest('.vault-note-clear')
+		if ( clearNoteButton !== null ) { saveVaultNote(clearNoteButton, true) }
 	})
 	MA.byId('vaultTextFilter').addEventListener('input', () => { renderVault(filterEntries()) })
 	MA.byId('vaultTypeFilter').addEventListener('change', () => { renderVault(filterEntries()) })
