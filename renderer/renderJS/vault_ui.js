@@ -209,6 +209,7 @@ function groupEntries(entries) {
 		const modTypes = uniqueValues(group.entries.flatMap((entry) => entry.modTypes ?? []))
 		const sources = uniqueValues(group.entries.flatMap((entry) => entry.sources ?? []).map((source) => friendlySourceName(source)))
 		const note = vaultNotes[vaultNoteKey(group.modName)]?.note ?? ''
+		const hasNote = note.trim() !== ''
 		const searchText = normalValue([
 			group.modName,
 			note,
@@ -232,6 +233,7 @@ function groupEntries(entries) {
 			modHubCategories,
 			modIcon,
 			modTypes,
+			hasNote,
 			note,
 			searchText,
 			sources,
@@ -246,12 +248,14 @@ function filterEntries() {
 	const typeFilter = MA.byId('vaultTypeFilter').value
 	const categoryFilter = MA.byId('vaultCategoryFilter').value
 	const modHubCategoryFilter = MA.byId('vaultModHubCategoryFilter').value
+	const noteFilter = MA.byId('vaultNoteFilter').value
 	const groups = groupEntries(vaultEntries)
 	return groups.filter((group) =>
 		(textFilter === '' || group.searchText.includes(textFilter)) &&
 		(typeFilter === '' || group.modTypes.includes(typeFilter)) &&
 		(categoryFilter === '' || group.categories.includes(categoryFilter)) &&
-		(modHubCategoryFilter === '' || group.modHubCategories.includes(modHubCategoryFilter))
+		(modHubCategoryFilter === '' || group.modHubCategories.includes(modHubCategoryFilter)) &&
+		(noteFilter === '' || (noteFilter === 'with' && group.hasNote) || (noteFilter === 'without' && !group.hasNote))
 	)
 }
 
@@ -437,6 +441,9 @@ async function saveVaultNote(button, shouldClear = false) {
 		clearButton.disabled = savedNote === ''
 		group.querySelector('.vault-note-status').textContent = savedNote === '' ? 'Note cleared.' : 'Note saved.'
 		MA.byIdText('vaultStatus', savedNote === '' ? `Cleared the note for ${modName}.` : `Saved the note for ${modName}.`)
+		if ( MA.byId('vaultNoteFilter').value !== '' ) {
+			await renderVault(filterEntries())
+		}
 	} catch (err) {
 		group.querySelector('.vault-note-status').textContent = `Note could not be saved: ${err.message}`
 	} finally {
@@ -563,11 +570,13 @@ window.addEventListener('DOMContentLoaded', () => {
 	MA.byId('vaultTypeFilter').addEventListener('change', () => { renderVault(filterEntries()) })
 	MA.byId('vaultCategoryFilter').addEventListener('change', () => { renderVault(filterEntries()) })
 	MA.byId('vaultModHubCategoryFilter').addEventListener('change', () => { renderVault(filterEntries()) })
+	MA.byId('vaultNoteFilter').addEventListener('change', () => { renderVault(filterEntries()) })
 	MA.byId('vaultClearFilters').addEventListener('click', () => {
 		MA.byId('vaultTextFilter').value = ''
 		MA.byId('vaultTypeFilter').value = ''
 		MA.byId('vaultCategoryFilter').value = ''
 		MA.byId('vaultModHubCategoryFilter').value = ''
+		MA.byId('vaultNoteFilter').value = ''
 		renderVault(filterEntries())
 	})
 	MA.byId('vaultImportCollections').addEventListener('click', importCollections)

@@ -95,6 +95,14 @@
 							<option value="">All internal categories</option>
 						</select>
 					</div>
+					<div class="col-md-4">
+						<label class="form-label small" for="vaultNoteFilter">Notes</label>
+						<select class="form-select form-select-sm" id="vaultNoteFilter">
+							<option value="">All note states</option>
+							<option value="with">With notes</option>
+							<option value="without">Without notes</option>
+						</select>
+					</div>
 					<div class="col-md-4 d-flex align-items-end">
 						<button class="btn btn-sm btn-outline-secondary w-100" id="vaultClearFilters" type="button">Clear filters</button>
 					</div>
@@ -121,7 +129,7 @@
 				<div>
 					<div class="fw-bold fs-5">
 						<template-var>modName</template-var>
-						<span class="badge text-bg-warning d-none vault-note-badge">Note</span>
+						<span class="badge text-bg-warning d-none vault-note-badge" data-bs-placement="top" data-bs-toggle="tooltip" title="This mod has a saved Vault note.">Has note</span>
 					</div>
 					<div class="small text-body-secondary"><template-var>fileCount</template-var></div>
 					<div class="small text-warning mt-1 d-none vault-note-preview"></div>
