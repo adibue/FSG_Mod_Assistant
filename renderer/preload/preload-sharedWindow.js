@@ -286,6 +286,7 @@ const pageAPI = {
 	'vault' : {
 		functions : {
 			all        : () => ipcRenderer.invoke('vault:all'),
+			cleanupUnused : (payload) => ipcRenderer.invoke('vault:cleanupUnused', payload),
 			collections : () => ipcRenderer.invoke('vault:collections'),
 			context    : () => ipcRenderer.send('context:copy'),
 			copyToCollection : (payload) => ipcRenderer.invoke('vault:copyToCollection', payload),

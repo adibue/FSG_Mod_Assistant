@@ -36,6 +36,10 @@
 			overflow: hidden;
 			white-space: pre-wrap;
 		}
+		.vault-cleanup-list {
+			max-height: 24rem;
+			overflow-y: auto;
+		}
 	</style>
 </head>
 <body data-bs-theme="dark" class="overflow-custom2">
@@ -67,6 +71,10 @@
 					<div class="col-md-3">
 						<div class="small text-body-secondary">Total size</div>
 						<div class="fs-4" id="vaultSize">0 B</div>
+					</div>
+					<div class="col-md-3">
+						<div class="small text-body-secondary">Safe cleanup</div>
+						<div class="fs-4" id="vaultCleanupSize">0 B</div>
 					</div>
 					<div class="col-md-3 d-flex align-items-end">
 						<button class="btn btn-sm btn-success w-100" id="vaultImportCollections" type="button">Scan collections into vault</button>
@@ -112,8 +120,29 @@
 					</div>
 					<div class="col-12 small text-body-secondary">
 						Vault folder: <span class="vault-path user-select-text" id="vaultFolder"></span>
-						<button class="btn btn-link btn-sm py-0 align-baseline" id="vaultOpenFolder" type="button">Open folder</button>
+						<span class="ms-2">Managed by the app. Use cleanup tools here instead of deleting Vault files manually.</span>
 					</div>
+				</div>
+			</div>
+		</div>
+
+		<div class="mx-2 mb-3 card">
+			<div class="card-body">
+				<div class="d-flex flex-wrap justify-content-between gap-2 align-items-center">
+					<div>
+						<div class="fw-bold">Vault cleanup</div>
+						<div class="small text-body-secondary" id="vaultCleanupSummary">Checking unused Vault ZIPs...</div>
+					</div>
+					<div class="d-flex flex-wrap gap-2">
+						<button class="btn btn-sm btn-outline-info" id="vaultShowCleanup" type="button">Review unused ZIPs</button>
+						<button class="btn btn-sm btn-danger" disabled id="vaultDeleteUnused" type="button">Delete selected unused ZIPs</button>
+					</div>
+				</div>
+				<div class="collapse mt-3" id="vaultCleanupPanel">
+					<div class="alert alert-warning py-2">
+						Only ZIPs that are not referenced by collection history are shown here. Rollback/current-history ZIPs are protected.
+					</div>
+					<div class="vault-cleanup-list list-group" id="vaultCleanupList"></div>
 				</div>
 			</div>
 		</div>
@@ -155,6 +184,25 @@
 		</div>
 		<div class="collapse mt-3 vault-group-body"><template-var>fileRows</template-var></div>
 	</li>
+</template>
+
+<template id="vault_cleanup_row">
+	<label class="list-group-item d-flex justify-content-between gap-3 align-items-start">
+		<div class="d-flex gap-2">
+			<input checked class="form-check-input mt-1 vault-cleanup-check" type="checkbox">
+			<div>
+				<div class="fw-bold"><template-var>modName</template-var></div>
+				<div class="small fst-italic"><template-var>fileName</template-var></div>
+				<div class="small text-body-secondary">Version: <template-var>versions</template-var></div>
+				<div class="small text-body-secondary">Source: <template-var>sources</template-var></div>
+				<div class="small text-body-secondary">Collections seen: <template-var>collections</template-var></div>
+			</div>
+		</div>
+		<div class="text-end">
+			<div class="fw-bold"><template-var>size</template-var></div>
+			<div class="small text-body-secondary"><template-var>updatedAt</template-var></div>
+		</div>
+	</label>
 </template>
 
 <template id="vault_file_row">

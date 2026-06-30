@@ -8,6 +8,7 @@
 
 let vaultEntries = []
 let vaultCollections = []
+let vaultCleanup = { count : 0, entries : [], totalSize : 0 }
 let vaultNotes = {}
 
 function uniqueValues(values) {
@@ -31,6 +32,11 @@ function vaultNoteKey(modName) {
 function setButtonState(button, disabled, text) {
 	button.disabled = disabled
 	button.textContent = text
+}
+
+function cleanListText(values, fallback = 'none') {
+	const cleanValues = uniqueValues(values ?? [])
+	return cleanValues.length === 0 ? fallback : cleanValues.join(', ')
 }
 
 function sortTime(entry) {
@@ -325,6 +331,53 @@ function refreshFilterOptions() {
 	fillSelect('vaultModHubCategoryFilter', uniqueValues(vaultEntries.flatMap((entry) => entry.modHubCategories ?? [])), 'All ModHub categories')
 }
 
+async function renderCleanupPanel() {
+	const cleanupSize = await DATA.bytesToHR(vaultCleanup.totalSize ?? 0)
+	const cleanupCount = vaultCleanup.count ?? 0
+	MA.byIdText('vaultCleanupSize', cleanupSize)
+	MA.byIdText(
+		'vaultCleanupSummary',
+		cleanupCount === 0 ?
+			'No unused Vault ZIPs are safe to remove right now.' :
+			`${cleanupCount} unused Vault ZIP${cleanupCount === 1 ? '' : 's'} can be removed to recover ${cleanupSize}.`
+	)
+	MA.byId('vaultDeleteUnused').disabled = cleanupCount === 0
+
+	const list = MA.byId('vaultCleanupList')
+	list.innerHTML = ''
+	if ( cleanupCount === 0 ) {
+		list.innerHTML = '<div class="list-group-item text-body-secondary">Nothing to clean. Protected rollback/history files are not shown here.</div>'
+		return
+	}
+
+	const rows = await Promise.all(vaultCleanup.entries.map(async (entry) => {
+		const size = await DATA.bytesToHR(entry.size ?? 0)
+		const row = DATA.templateEngine('vault_cleanup_row', {
+			collections : DATA.escapeSpecial(cleanListText(entry.collections)),
+			fileName    : DATA.escapeSpecial(entry.fileName ?? ''),
+			modName     : DATA.escapeSpecial(entry.modName ?? entry.fileName ?? 'Unknown mod'),
+			size        : DATA.escapeSpecial(size),
+			sources     : DATA.escapeSpecial(cleanListText((entry.sources ?? []).map((source) => friendlySourceName(source)))),
+			updatedAt   : DATA.escapeSpecial(formatTimestamp(entry.updatedAt)),
+			versions    : DATA.escapeSpecial(cleanListText(entry.versions, 'unknown')),
+		})
+		row.querySelector('.vault-cleanup-check').value = entry.hash ?? ''
+		return fragmentToHTML(row)
+	}))
+	list.innerHTML = rows.join('')
+}
+
+async function updateVaultSummary(summary) {
+	vaultEntries = summary.entries
+	vaultCleanup = summary.cleanup ?? { count : 0, entries : [], totalSize : 0 }
+	vaultNotes = summary.notes ?? vaultNotes
+	MA.byIdText('vaultCount', summary.totalCount.toString())
+	MA.byIdText('vaultUsedCount', summary.usedCount.toString())
+	MA.byIdText('vaultSize', await DATA.bytesToHR(summary.totalSize))
+	MA.byIdText('vaultFolder', summary.folder)
+	await renderCleanupPanel()
+}
+
 async function renderVault(groups) {
 	const list = MA.byId('vaultList')
 	list.innerHTML = ''
@@ -391,13 +444,8 @@ async function loadVault() {
 		window.vault_IPC.all(),
 		window.vault_IPC.collections(),
 	])
-	vaultEntries = vault.entries
 	vaultCollections = collections
-	vaultNotes = vault.notes ?? {}
-	MA.byIdText('vaultCount', vault.totalCount.toString())
-	MA.byIdText('vaultUsedCount', vault.usedCount.toString())
-	MA.byIdText('vaultSize', await DATA.bytesToHR(vault.totalSize))
-	MA.byIdText('vaultFolder', vault.folder)
+	await updateVaultSummary(vault)
 	refreshFilterOptions()
 	await renderVault(filterEntries())
 }
@@ -512,12 +560,8 @@ async function importCollections() {
 	MA.byIdText('vaultStatus', 'Scanning collections and adding unique ZIPs to the vault...')
 	try {
 		const result = await window.vault_IPC.importCollections()
-		vaultEntries = result.summary.entries
 		vaultCollections = await window.vault_IPC.collections()
-		MA.byIdText('vaultCount', result.summary.totalCount.toString())
-		MA.byIdText('vaultUsedCount', result.summary.usedCount.toString())
-		MA.byIdText('vaultSize', await DATA.bytesToHR(result.summary.totalSize))
-		MA.byIdText('vaultFolder', result.summary.folder)
+		await updateVaultSummary(result.summary)
 		refreshFilterOptions()
 		await renderVault(filterEntries())
 		const errorText = result.errors.length === 0 ? '' : ` ${result.errors.length} item${result.errors.length === 1 ? '' : 's'} could not be added.`
@@ -538,11 +582,7 @@ async function refreshModHubCategories() {
 	MA.byIdText('vaultStatus', 'Reading ModHub category data for vaulted mods. This may take a little while...')
 	try {
 		const result = await window.vault_IPC.refreshModHub()
-		vaultEntries = result.summary.entries
-		MA.byIdText('vaultCount', result.summary.totalCount.toString())
-		MA.byIdText('vaultUsedCount', result.summary.usedCount.toString())
-		MA.byIdText('vaultSize', await DATA.bytesToHR(result.summary.totalSize))
-		MA.byIdText('vaultFolder', result.summary.folder)
+		await updateVaultSummary(result.summary)
 		refreshFilterOptions()
 		await renderVault(filterEntries())
 		const errorText = result.errors.length === 0 ? '' : ` ${result.errors.length} ModHub page${result.errors.length === 1 ? '' : 's'} could not be read.`
@@ -553,6 +593,50 @@ async function refreshModHubCategories() {
 	} finally {
 		button.disabled = false
 		button.textContent = originalText
+	}
+}
+
+async function deleteSelectedUnusedVaultFiles() {
+	const selectedHashes = [...MA.byId('vaultCleanupList').querySelectorAll('.vault-cleanup-check:checked')].map((checkbox) => checkbox.value)
+	if ( selectedHashes.length === 0 ) {
+		MA.byIdText('vaultStatus', 'Choose at least one unused Vault ZIP before deleting.')
+		return
+	}
+	const selectedEntries = vaultCleanup.entries.filter((entry) => selectedHashes.includes(entry.hash))
+	if ( selectedEntries.length === 0 ) {
+		MA.byIdText('vaultStatus', 'The selected cleanup rows could not be matched to Vault files. Refresh the Vault and try again.')
+		return
+	}
+	const selectedSize = selectedEntries.reduce((sum, entry) => sum + (entry.size ?? 0), 0)
+	const selectedSizeText = await DATA.bytesToHR(selectedSize)
+	const confirmed = confirm(`Delete ${selectedHashes.length} unused Vault ZIP${selectedHashes.length === 1 ? '' : 's'} and recover ${selectedSizeText}?\n\nRollback/history ZIPs are protected and will not be deleted.`)
+	if ( !confirmed ) {
+		MA.byIdText('vaultStatus', 'Vault cleanup cancelled. Nothing was deleted.')
+		return
+	}
+
+	const button = MA.byId('vaultDeleteUnused')
+	const originalText = button.textContent
+	setButtonState(button, true, 'Deleting...')
+	try {
+		const result = await window.vault_IPC.cleanupUnused({ hashes : selectedHashes })
+		if ( typeof result.summary !== 'undefined' ) {
+			await updateVaultSummary(result.summary)
+			refreshFilterOptions()
+			await renderVault(filterEntries())
+		}
+		if ( result.error ) {
+			MA.byIdText('vaultStatus', `Vault cleanup failed: ${result.error}`)
+			return
+		}
+		const recoveredText = await DATA.bytesToHR(result.recoveredSize ?? 0)
+		const skippedText = result.skipped?.length > 0 ? ` ${result.skipped.length} item${result.skipped.length === 1 ? '' : 's'} were skipped because they are no longer eligible.` : ''
+		const errorText = result.errors?.length > 0 ? ` ${result.errors.length} item${result.errors.length === 1 ? '' : 's'} could not be deleted.` : ''
+		MA.byIdText('vaultStatus', `Deleted ${result.deleted.length} unused Vault ZIP${result.deleted.length === 1 ? '' : 's'} and recovered ${recoveredText}.${skippedText}${errorText}`)
+	} catch (err) {
+		MA.byIdText('vaultStatus', `Vault cleanup failed: ${err.message}`)
+	} finally {
+		setButtonState(button, (vaultCleanup.count ?? 0) === 0, originalText)
 	}
 }
 
@@ -581,7 +665,10 @@ window.addEventListener('DOMContentLoaded', () => {
 	})
 	MA.byId('vaultImportCollections').addEventListener('click', importCollections)
 	MA.byId('vaultRefreshModHub').addEventListener('click', refreshModHubCategories)
-	MA.byId('vaultOpenFolder').addEventListener('click', () => { window.vault_IPC.openFolder() })
+	MA.byId('vaultShowCleanup').addEventListener('click', () => {
+		bootstrap.Collapse.getOrCreateInstance(MA.byId('vaultCleanupPanel')).toggle()
+	})
+	MA.byId('vaultDeleteUnused').addEventListener('click', deleteSelectedUnusedVaultFiles)
 	MA.byId('vaultBackToUpdates').addEventListener('click', () => { window.vault_IPC.dispatchUpdate() })
 	loadVault()
 })

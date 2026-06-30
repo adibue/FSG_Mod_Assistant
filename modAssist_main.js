@@ -1073,6 +1073,21 @@ function modLibraryFilePath(hash, fileName) {
 	return path.join(app.getPath('userData'), 'mod-library', 'files', hash.slice(0, 2), `${hash}${ext}`)
 }
 
+function modLibraryFolder() {
+	return path.join(app.getPath('userData'), 'mod-library')
+}
+
+function modLibraryFilesFolder() {
+	return path.join(modLibraryFolder(), 'files')
+}
+
+function isPathInsideFolder(childPath, parentPath) {
+	const resolvedChild = path.resolve(childPath)
+	const resolvedParent = path.resolve(parentPath)
+	const relativePath = path.relative(resolvedParent, resolvedChild)
+	return relativePath === '' || (!relativePath.startsWith('..') && !path.isAbsolute(relativePath))
+}
+
 // eslint-disable-next-line complexity
 async function registerModLibraryFile(filePath, metadata = {}) {
 	if ( typeof filePath !== 'string' || !fs.existsSync(filePath) ) {
@@ -1189,12 +1204,12 @@ function saveVaultNote({ modName, note } = {}) {
 	}
 }
 
-function getModLibrarySummary() {
+function getModLibraryEntries() {
 	const records = serveIPC.storeLibrary.get('records', {})
 	const historyEntries = serveIPC.storeHistory.get('entries', [])
 	const usedHashes = new Set(historyEntries.flatMap((entry) => [entry.backupHash, entry.currentHash]).filter((value) => typeof value === 'string'))
 	const usedPaths = new Set(historyEntries.flatMap((entry) => [entry.backupPath, entry.currentLibraryPath]).filter((value) => typeof value === 'string'))
-	const entries = Object.entries(records)
+	return Object.entries(records)
 		// eslint-disable-next-line complexity
 		.map(([recordHash, record]) => {
 			const fileExists = typeof record?.filePath === 'string' && fs.existsSync(record.filePath)
@@ -1228,10 +1243,93 @@ function getModLibrarySummary() {
 			}
 		})
 		.sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''))
+}
+
+function getModLibraryCleanupPreview() {
+	const entries = getModLibraryEntries()
+	const cleanupEntries = entries
+		.filter((entry) => !entry.isUsed && entry.fileExists)
+		.map((entry) => ({
+			collections : entry.collections,
+			fileName    : entry.fileName,
+			hash        : entry.hash,
+			modName     : entry.modNames[0] ?? entry.fileName,
+			size        : entry.size,
+			sources     : entry.sources,
+			updatedAt   : entry.updatedAt,
+			versions    : entry.versions,
+		}))
 
 	return {
+		count : cleanupEntries.length,
+		entries : cleanupEntries,
+		totalSize : cleanupEntries.reduce((sum, entry) => sum + entry.size, 0),
+	}
+}
+
+async function cleanupUnusedModLibraryFiles({ hashes } = {}) {
+	if ( !Array.isArray(hashes) || hashes.length === 0 ) { throw new Error('No unused Vault ZIPs were selected for cleanup.') }
+
+	const selectedHashes = uniqueCleanArray(hashes)
+	const records = serveIPC.storeLibrary.get('records', {})
+	const cleanupEntries = new Map(getModLibraryEntries().filter((entry) => !entry.isUsed && entry.fileExists).map((entry) => [entry.hash, entry]))
+	const filesRoot = modLibraryFilesFolder()
+	const deleted = []
+	const skipped = []
+	const errors = []
+
+	for ( const hash of selectedHashes ) {
+		const entry = cleanupEntries.get(hash)
+		const record = records[hash]
+		if ( typeof entry === 'undefined' || typeof record === 'undefined' ) {
+			skipped.push({ hash, reason : 'This Vault ZIP is protected, missing, or no longer eligible for cleanup.' })
+			continue
+		}
+		if ( typeof record.filePath !== 'string' || !isPathInsideFolder(record.filePath, filesRoot) ) {
+			skipped.push({ hash, reason : 'The stored path is outside the managed Vault files folder.' })
+			continue
+		}
+
+		try {
+			await fsPromise.rm(record.filePath, { force : false })
+			delete records[hash]
+			deleted.push({
+				fileName : entry.fileName,
+				hash,
+				size : entry.size,
+			})
+			const parentFolder = path.dirname(record.filePath)
+			if ( isPathInsideFolder(parentFolder, filesRoot) ) {
+				await fsPromise.rmdir(parentFolder).catch(() => {})
+			}
+		} catch (err) {
+			errors.push({
+				fileName : entry.fileName,
+				hash,
+				error : err.message,
+			})
+		}
+	}
+
+	serveIPC.storeLibrary.set('records', records)
+
+	return {
+		deleted,
+		errors,
+		ok : errors.length === 0,
+		recoveredSize : deleted.reduce((sum, entry) => sum + entry.size, 0),
+		skipped,
+		summary : getModLibrarySummary(),
+	}
+}
+
+function getModLibrarySummary() {
+	const entries = getModLibraryEntries()
+
+	return {
+		cleanup    : getModLibraryCleanupPreview(),
 		entries,
-		folder     : path.join(app.getPath('userData'), 'mod-library'),
+		folder     : modLibraryFolder(),
 		notes      : getVaultNotes(),
 		totalCount : entries.length,
 		totalSize  : entries.reduce((sum, entry) => sum + entry.size, 0),
@@ -1884,6 +1982,13 @@ ipcMain.handle('vault:collections', () => getVaultCollections())
 ipcMain.handle('vault:copyToCollection', async (_, payload) => {
 	try {
 		return await copyVaultRecordToCollection(payload)
+	} catch (err) {
+		return { ok : false, error : err.message }
+	}
+})
+ipcMain.handle('vault:cleanupUnused', async (_, payload) => {
+	try {
+		return await cleanupUnusedModLibraryFiles(payload)
 	} catch (err) {
 		return { ok : false, error : err.message }
 	}
