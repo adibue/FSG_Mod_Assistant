@@ -23,6 +23,15 @@ function isGitHubURL(sourceURL) {
 	}
 }
 
+function isWebURL(sourceURL) {
+	try {
+		return new URL(sourceURL).protocol === 'https:'
+	} catch {
+		return false
+	}
+}
+
+// eslint-disable-next-line complexity
 function makeCandidateMap(modCollect) {
 	const thisVersion    = modCollect.appSettings.game_version
 	const candidates     = {}
@@ -48,30 +57,42 @@ function makeCandidateMap(modCollect) {
 			const sourceURL = modSites[modName] ?? ''
 
 			if ( thisMod.fileDetail.isFolder ) { continue }
-			if ( !isGitHubURL(sourceURL) ) { continue }
 
-			candidates[modName] ??= {
-				collectionKeys : [],
-				collections : [],
-				icon        : thisMod.modDesc.iconImage,
-				local       : new Set(),
-				sourceURL   : sourceURL,
-				title       : doL10N(thisMod.l10n.title, modCollect.appSettings.force_lang),
+			const addCandidate = (sourceType, sourceLink, remoteVersion = null) => {
+				const candidateKey = `${modName}::${sourceType}`
+				candidates[candidateKey] ??= {
+					collectionKeys : [],
+					collections : [],
+					icon        : thisMod.modDesc.iconImage,
+					local       : new Set(),
+					modName,
+					remoteVersion,
+					sourceLabel : sourceType === 'github' ? 'GitHub' : 'ModHub',
+					sourceType,
+					sourceURL   : sourceLink,
+					title       : doL10N(thisMod.l10n.title, modCollect.appSettings.force_lang),
+				}
+				if ( !candidates[candidateKey].collectionKeys.includes(collectKey) ) {
+					candidates[candidateKey].collectionKeys.push(collectKey)
+					candidates[candidateKey].collections.push(collectKeyName[collectKey])
+				}
+				candidates[candidateKey].local.add(thisMod.modDesc.version)
 			}
 
-			candidates[modName].collectionKeys.push(collectKey)
-			candidates[modName].collections.push(collectKeyName[collectKey])
-			candidates[modName].local.add(thisMod.modDesc.version)
+			if ( isGitHubURL(sourceURL) ) { addCandidate('github', sourceURL) }
+			if ( thisMod.modHub.id !== null && typeof thisMod.modHub.version === 'string' && thisMod.modHub.version !== '' ) {
+				addCandidate('modhub', `https://www.farming-simulator.com/mod.php?mod_id=${thisMod.modHub.id}`, thisMod.modHub.version)
+			}
 		}
 	}
 
 	return candidates
 }
 
-function isUpdateAvailable(localVersions, remoteVersion) {
+function isUpdateAvailable(localVersions, remoteVersion, allowUnknownDifference = false) {
 	for ( const localVersion of localVersions ) {
 		const compare = DATA.versionCompare(localVersion, remoteVersion)
-		if ( compare < 0 || (Number.isNaN(compare) && DATA.versionDifferent(localVersion, remoteVersion)) ) {
+		if ( compare < 0 || (allowUnknownDifference && Number.isNaN(compare) && DATA.versionDifferent(localVersion, remoteVersion)) ) {
 			return true
 		}
 	}
@@ -89,6 +110,9 @@ function statusText(result) {
 }
 
 function downloadStatusText(result) {
+	if ( result.source === 'modhub' ) {
+		return '<span class="badge text-bg-secondary">Manual download from ModHub</span>'
+	}
 	if ( result.hasDownload ) {
 		const downloadLabel = result.downloadSource === 'repositoryFile' ?
 			I18N.defer('update_list_repo_zip_available', false) :
@@ -161,7 +185,7 @@ function getSelectedCheckboxes() {
 
 function openSelectedSources() {
 	for ( const checkbox of getSelectedCheckboxes() ) {
-		if ( isGitHubURL(checkbox.dataset.sourceUrl) ) {
+		if ( isWebURL(checkbox.dataset.sourceUrl) ) {
 			window.update_IPC.openURL(checkbox.dataset.sourceUrl)
 		}
 	}
@@ -177,7 +201,7 @@ function getSelectedDownloadCandidates() {
 			modName  : checkbox.dataset.modName,
 			sourceURL : checkbox.dataset.sourceUrl,
 			url      : checkbox.dataset.downloadUrl,
-			version  : checkbox.dataset.githubVersion,
+			version  : checkbox.dataset.remoteVersion,
 		}))
 }
 
@@ -212,15 +236,23 @@ async function displayCandidates(candidates, renderID) {
 
 	MA.byIdHTML('updateStatus', `${I18N.defer('update_list_checking', false)} 0 / ${candidateEntries.length}`)
 
-	const checkPromises = candidateEntries.map(async ([key, entry]) => {
-		const result = await withTimeout(window.update_IPC.getGitHub(entry.sourceURL))
+	const checkPromises = candidateEntries.map(async ([, entry]) => {
+		const result = entry.sourceType === 'github' ?
+			await withTimeout(window.update_IPC.getGitHub(entry.sourceURL)) :
+			{
+				hasDownload : false,
+				ok          : true,
+				source      : 'modhub',
+				url         : entry.sourceURL,
+				version     : entry.remoteVersion,
+			}
 		completeCount++
 		if ( renderID === activeRenderID ) {
 			MA.byIdHTML('updateStatus', `${I18N.defer('update_list_checking', false)} ${completeCount} / ${candidateEntries.length}`)
 		}
 
 		if ( !result.ok ) { return null }
-		if ( !isUpdateAvailable(entry.local, result.version) ) { return null }
+		if ( !isUpdateAvailable(entry.local, result.version, entry.sourceType === 'github') ) { return null }
 	
 		const collectionList = entry.collections
 			.sort((a, b) => Intl.Collator().compare(a, b))
@@ -233,15 +265,16 @@ async function displayCandidates(candidates, renderID) {
 			collectionKey  : collectionKey,
 			collectionName : collectionName,
 			downloadURL    : result.downloadURL ?? null,
-			modName        : key,
+			modName        : entry.modName,
 			node           : DATA.templateEngine('update_line', {
 				collections   : collectionList.join(''),
 				downloadStatus : downloadStatusText(result),
-				githubVersion : DATA.escapeSpecial(result.version),
 				iconImage     : `<img class="img-fluid" src="${DATA.iconMaker(entry.icon)}" />`,
 				localVersion  : DATA.escapeSpecial([...entry.local].sort().join(', ')),
 				realName      : entry.title,
-				shortName     : DATA.escapeSpecial(key),
+				remoteVersion : DATA.escapeSpecial(result.version),
+				shortName     : DATA.escapeSpecial(entry.modName),
+				sourceName    : DATA.escapeSpecial(entry.sourceLabel),
 				statusText    : statusText(result),
 			}),
 			sourceURL : entry.sourceURL,
@@ -263,14 +296,14 @@ async function displayCandidates(candidates, renderID) {
 			selectCheckbox.dataset.modName = modName
 		}
 		if ( downloadURL !== null ) { selectCheckbox.dataset.downloadUrl = downloadURL }
-		selectCheckbox.dataset.githubVersion = version
+		selectCheckbox.dataset.remoteVersion = version
 		selectCheckbox.dataset.sourceUrl = sourceURL
 		selectCheckbox.addEventListener('change', updateSelectedCount)
 		const sourceButton = node.querySelector('.update-source-button')
 		sourceButton.dataset.sourceUrl = sourceURL
 		sourceButton.addEventListener('click', (event) => {
 			const buttonURL = event.currentTarget.dataset.sourceUrl
-			if ( isGitHubURL(buttonURL) ) {
+			if ( isWebURL(buttonURL) ) {
 				window.update_IPC.openURL(buttonURL)
 			}
 		})

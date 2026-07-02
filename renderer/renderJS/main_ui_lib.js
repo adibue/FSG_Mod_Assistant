@@ -708,6 +708,7 @@ class StateManager {
 			},
 			updateCheck : {
 				hasGitHubUpdate : false,
+				hasModHubUpdate : thisMod.badgeArray.includes('update'),
 				isComplete      : false,
 			},
 		}
@@ -776,6 +777,12 @@ class StateManager {
 			for ( const badge of thisMod?.displayBadges?.filter?.((x) => isHolding || x.name !== `fs${this.flag.currentVersion}`) || [] ) {
 				badgeContain.appendChild(I18N.buildBadgeMod(badge))
 			}
+		}
+		const modHubUpdateBadge = badgeContain.querySelector('.badge-mod-update')
+		if ( modHubUpdateBadge !== null ) {
+			modHubUpdateBadge.removeAttribute('data-key')
+			modHubUpdateBadge.textContent = 'ModHub update'
+			modHubUpdateBadge.title = 'A newer version is available from the official ModHub catalogue'
 		}
 		this.#refreshModUpdateBadge(thisMod, mod)
 		this.#refreshModRollbackBadge(thisMod, mod)
@@ -882,7 +889,7 @@ class StateManager {
 		const badgeNode = document.createElement('span')
 		badgeNode.classList.add('badge', 'border', 'border-2', 'text-bg-warning', 'border-warning', 'badge-mod-github_update')
 		badgeNode.title = 'A newer version may be available from the saved GitHub source'
-		badgeNode.textContent = 'update'
+		badgeNode.textContent = 'GitHub update'
 		return badgeNode
 	}
 
@@ -1180,8 +1187,13 @@ class StateManager {
 
 			const CKey    = this.track.openCollection
 			const allMods = new Set(Object.keys(this.mods[CKey]).map((MKey) => `${CKey}--${MKey}`))
-
-			this.track.selected = allMods.difference(this.track.selected)
+			const invertedSelection = new Set()
+			for ( const modID of allMods ) {
+				if ( !this.track.selected.has(modID) ) {
+					invertedSelection.add(modID)
+				}
+			}
+			this.track.selected = invertedSelection
 			this.refreshSelected()
 			this.doSideBar()
 		},
@@ -1197,7 +1209,7 @@ class StateManager {
 
 			this.track.selected.clear()
 			for ( const [MKey, modRec] of Object.entries(this.mods[CKey]) ) {
-				if ( modRec.updateCheck.hasGitHubUpdate ) {
+				if ( modRec.updateCheck.hasGitHubUpdate || modRec.updateCheck.hasModHubUpdate ) {
 					this.track.selected.add(`${CKey}--${MKey}`)
 				}
 			}
@@ -2233,9 +2245,10 @@ class FileLib {
 
 	// MARK: start (button)
 	start(mode, selectAll, selectOne) {
-		if ( selectAll.length === 0 ) { return }
+		const selectedList = Array.isArray(selectAll) ? selectAll : [...selectAll ?? []]
+		if ( selectedList.length === 0 && selectOne === null ) { return }
 
-		const realSelect = selectOne !== null ? new Set([selectOne]) : selectAll
+		const realSelect = selectOne !== null ? [selectOne] : selectedList
 
 		this.flags.operation = mode
 		this.flags.isRunning = true
@@ -2260,20 +2273,20 @@ class FileLib {
 			case 'copy' :
 			case 'move' :
 			case 'delete' :
-				window.main_IPC.files.list(mode, [...realSelect]).then((files) => {
+				window.main_IPC.files.list(mode, realSelect).then((files) => {
 					this.display(mode, files)
 				})
 				break
 			case 'zip' :
-				window.main_IPC.files.exportZIP([...realSelect])
+				window.main_IPC.files.exportZIP(realSelect)
 				this.stop()
 				break
 			case 'openMods' :
-				return window.main_IPC.files.openExplore([...realSelect][0])
+				return window.main_IPC.files.openExplore(realSelect[0])
 			case 'openHub' :
-				return window.main_IPC.files.openModHub([...realSelect][0])
+				return window.main_IPC.files.openModHub(realSelect[0])
 			case 'openExt' :
-				return window.main_IPC.files.openExtSite([...realSelect][0])
+				return window.main_IPC.files.openExtSite(realSelect[0])
 			default :
 				break
 		}

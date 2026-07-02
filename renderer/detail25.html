@@ -61,6 +61,15 @@
 			margin-top: -10%;
 			width: 35%;
 		}
+		.store-preview-strip img {
+			width: 4rem;
+			height: 4rem;
+			object-fit: contain;
+			background: rgba(0, 0, 0, 0.2);
+			border: 1px solid var(--bs-border-color);
+			border-radius: 0.5rem;
+			padding: 0.25rem;
+		}
 
 		.joint-container .joint {
 			border: none;
@@ -122,9 +131,10 @@
 					<tr><th scope="col"><i18n-text data-key="detail_mod_author"></i18n-text></th><td class="text-end" id="mod_author"></td></tr>
 					<tr><th scope="col"><i18n-text data-key="detail_mod_version"></i18n-text></th><td class="text-end" id="version"></td></tr>
 					<tr><th scope="col"><i18n-text data-key="detail_mod_mh_version"></i18n-text></th><td class="text-end" id="mh_version"></td></tr>
+					<tr><th scope="col">ModHub Status</th><td class="text-end" id="modhub_status"></td></tr>
 					<tr><th scope="col"><i18n-text data-key="detail_mod_update_source"></i18n-text></th><td class="text-end" id="update_source"></td></tr>
 					<tr><th scope="col"><i18n-text data-key="detail_mod_github_version"></i18n-text></th><td class="text-end" id="github_version"></td></tr>
-					<tr><th scope="col"><i18n-text data-key="detail_mod_update_status"></i18n-text></th><td class="text-end" id="update_status"></td></tr>
+					<tr><th scope="col">GitHub Status</th><td class="text-end" id="update_status"></td></tr>
 					<tr><th scope="col"><i18n-text data-key="detail_mod_size"></i18n-text></th><td class="text-end" id="filesize"></td></tr>
 					<tr><th scope="col"><i18n-text data-key="detail_mod_date"></i18n-text></th><td class="text-end" id="file_date"></td></tr>
 					<tr><th scope="col"><i18n-text data-key="detail_mod_has_scripts"></i18n-text></th><td class="text-end" id="has_scripts"></td></tr>
@@ -141,6 +151,10 @@
 				<i18n-text type="button" class="btn btn-warning w-100 mt-2 d-none" id="download_latest_update" data-key="detail_mod_download_update_button"></i18n-text>
 				<i18n-text type="button" class="btn btn-info w-100 mt-2 d-none" id="rollback_latest_update" data-key="detail_mod_rollback_button"></i18n-text>
 				<div class="d-none mt-2" id="rollback_versions"></div>
+				<div class="d-none mt-3" id="store_preview_div">
+					<div class="small text-body-secondary mb-1">Store item preview</div>
+					<div class="store-preview-strip d-flex flex-wrap gap-2" id="store_preview_items"></div>
+				</div>
 			</div>
 		</div>
 

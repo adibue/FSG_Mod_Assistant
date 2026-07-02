@@ -14,6 +14,7 @@
 	<link rel="stylesheet" href="inc/fsico.css">
 	<script src="inc/bootstrap.bundle.min.js"></script>
 	<script src="renderJS/util/util_lib.js"></script>
+	<script src="renderJS/util/baseGameData_25.js"></script>
 	<script src="renderJS/vault_ui.js"></script>
 	<style>
 		.vault-path {
@@ -35,6 +36,30 @@
 			max-height: 4.5em;
 			overflow: hidden;
 			white-space: pre-wrap;
+		}
+		.vault-store-preview {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 0.35rem;
+		}
+		.vault-store-preview img {
+			width: 3.4rem;
+			height: 3.4rem;
+			object-fit: contain;
+			background: rgba(0, 0, 0, 0.2);
+			border: 1px solid var(--bs-border-color);
+			border-radius: 0.45rem;
+			padding: 0.2rem;
+		}
+		.vault-store-preview-more {
+			min-width: 3.4rem;
+			height: 3.4rem;
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			border: 1px solid var(--bs-border-color);
+			border-radius: 0.45rem;
+			color: var(--bs-secondary-color);
 		}
 		.vault-cleanup-list {
 			max-height: 24rem;
@@ -80,13 +105,13 @@
 						<button class="btn btn-sm btn-success w-100" id="vaultImportCollections" type="button">Scan collections into vault</button>
 					</div>
 					<div class="col-md-3 d-flex align-items-end">
-						<button class="btn btn-sm btn-warning w-100" id="vaultRefreshModHub" type="button">Refresh ModHub categories</button>
+						<button class="btn btn-sm btn-warning w-100" id="vaultRefreshModHub" type="button">Refresh ModHub information</button>
 					</div>
 					<div class="col-md-3 d-flex align-items-end">
 						<button class="btn btn-sm btn-info w-100" id="vaultBackToUpdates" type="button">Back to updates</button>
 					</div>
 					<div class="col-md-4">
-						<label class="form-label small" for="vaultTypeFilter">Mod type</label>
+						<label class="form-label small" for="vaultTypeFilter">Internal mod type</label>
 						<select class="form-select form-select-sm" id="vaultTypeFilter">
 							<option value="">All mod types</option>
 						</select>
@@ -98,9 +123,15 @@
 						</select>
 					</div>
 					<div class="col-md-4">
-						<label class="form-label small" for="vaultCategoryFilter">Category</label>
+						<label class="form-label small" for="vaultCategoryFilter">Internal store category</label>
 						<select class="form-select form-select-sm" id="vaultCategoryFilter">
 							<option value="">All internal categories</option>
+						</select>
+					</div>
+					<div class="col-md-4">
+						<label class="form-label small" for="vaultCollectionFilter">Collection</label>
+						<select class="form-select form-select-sm" id="vaultCollectionFilter">
+							<option value="">All collections</option>
 						</select>
 					</div>
 					<div class="col-md-4">
@@ -110,6 +141,31 @@
 							<option value="with">With notes</option>
 							<option value="without">Without notes</option>
 						</select>
+					</div>
+					<div class="col-md-4">
+						<label class="form-label small" for="vaultRollbackFilter">Rollback</label>
+						<select class="form-select form-select-sm" id="vaultRollbackFilter">
+							<option value="">All rollback states</option>
+							<option value="with">Has rollback</option>
+							<option value="without">No rollback</option>
+						</select>
+					</div>
+					<div class="col-md-4">
+						<label class="form-label small" for="vaultUpdateFilter">Update status</label>
+						<select class="form-select form-select-sm" id="vaultUpdateFilter">
+							<option value="">All update states</option>
+							<option value="available">Update available</option>
+							<option value="none">No known update</option>
+						</select>
+					</div>
+					<div class="col-md-8">
+						<label class="form-label small">Update source</label>
+						<div class="btn-group btn-group-sm w-100" id="vaultSourceFilter" role="group" aria-label="Filter by update source">
+							<button aria-pressed="true" class="btn btn-outline-secondary active" data-source="" type="button">All</button>
+							<button aria-pressed="false" class="btn btn-outline-success" data-source="modhub" type="button">ModHub</button>
+							<button aria-pressed="false" class="btn btn-outline-warning" data-source="github" type="button">GitHub</button>
+							<button aria-pressed="false" class="btn btn-outline-info" data-source="manual" type="button">Manual</button>
+						</div>
 					</div>
 					<div class="col-md-4 d-flex align-items-end">
 						<button class="btn btn-sm btn-outline-secondary w-100" id="vaultClearFilters" type="button">Clear filters</button>
@@ -132,6 +188,7 @@
 					<div>
 						<div class="fw-bold">Vault cleanup</div>
 						<div class="small text-body-secondary" id="vaultCleanupSummary">Checking unused Vault ZIPs...</div>
+						<div class="small text-info" id="vaultCleanupPreviewSummary">Cleanup preview is based on Vault retention rules.</div>
 					</div>
 					<div class="d-flex flex-wrap gap-2">
 						<button class="btn btn-sm btn-outline-info" id="vaultShowCleanup" type="button">Review unused ZIPs</button>
@@ -140,9 +197,35 @@
 				</div>
 				<div class="collapse mt-3" id="vaultCleanupPanel">
 					<div class="alert alert-warning py-2">
-						Only ZIPs that are not referenced by collection history are shown here. Rollback/current-history ZIPs are protected.
+						Preview only: these are the ZIPs that Vault retention rules currently allow cleanup to remove. Kept, rollback, and history-referenced ZIPs are protected.
 					</div>
 					<div class="vault-cleanup-list list-group" id="vaultCleanupList"></div>
+					<div class="d-flex flex-wrap justify-content-between gap-2 align-items-center mt-2 small">
+						<div class="text-body-secondary" id="vaultCleanupSelectionSummary">Selected cleanup ZIPs: 0</div>
+						<div class="fw-bold text-info" id="vaultCleanupRecoverableSummary">Recoverable from selected ZIPs: 0 B</div>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<div class="mx-2 mb-3 card">
+			<div class="card-body">
+				<div class="row g-2 align-items-end">
+					<div class="col-md-5">
+						<label class="form-label small" for="vaultBulkCopyTarget">Copy selected Vault ZIPs to</label>
+						<select class="form-select form-select-sm" id="vaultBulkCopyTarget"></select>
+					</div>
+					<div class="col-md-3">
+						<button class="btn btn-sm btn-success w-100" disabled id="vaultBulkCopyButton" type="button">Copy selected to collection</button>
+					</div>
+					<div class="col-md-2">
+						<button class="btn btn-sm btn-outline-info w-100" id="vaultSelectShown" type="button">Select shown</button>
+					</div>
+					<div class="col-md-2">
+						<button class="btn btn-sm btn-outline-secondary w-100" id="vaultSelectNone" type="button">Select none</button>
+					</div>
+					<div class="col-12 small text-body-secondary" id="vaultSelectedCount">Selected Vault ZIPs: 0</div>
+					<div class="col-12 small" id="vaultBulkCopyStatus" role="status"></div>
 				</div>
 			</div>
 		</div>
@@ -162,6 +245,7 @@
 					</div>
 					<div class="small text-body-secondary"><template-var>fileCount</template-var></div>
 					<div class="small text-warning mt-1 d-none vault-note-preview"></div>
+					<template-var>storeItemPreviews</template-var>
 				</div>
 			</div>
 			<div class="text-end">
@@ -187,7 +271,7 @@
 </template>
 
 <template id="vault_cleanup_row">
-	<label class="list-group-item d-flex justify-content-between gap-3 align-items-start">
+		<div class="list-group-item d-flex justify-content-between gap-3 align-items-start">
 		<div class="d-flex gap-2">
 			<input checked class="form-check-input mt-1 vault-cleanup-check" type="checkbox">
 			<div>
@@ -196,35 +280,43 @@
 				<div class="small text-body-secondary">Version: <template-var>versions</template-var></div>
 				<div class="small text-body-secondary">Source: <template-var>sources</template-var></div>
 				<div class="small text-body-secondary">Collections seen: <template-var>collections</template-var></div>
+				<div class="small text-warning">Cleanup reason: <template-var>retentionReason</template-var></div>
 			</div>
 		</div>
 		<div class="text-end">
 			<div class="fw-bold"><template-var>size</template-var></div>
 			<div class="small text-body-secondary"><template-var>updatedAt</template-var></div>
 		</div>
-	</label>
+		</div>
 </template>
 
 <template id="vault_file_row">
 	<div class="border rounded p-2 mb-2 vault-file-row">
 		<div class="d-flex justify-content-between gap-2">
-			<div>
-				<div class="fw-bold"><template-var>versionLabel</template-var></div>
-				<div class="small fst-italic"><template-var>fileName</template-var></div>
+			<div class="d-flex gap-2 align-items-start">
+				<input class="form-check-input mt-1 vault-copy-check" title="Select this stored ZIP for bulk copying." type="checkbox">
+				<div>
+					<div class="fw-bold"><template-var>versionLabel</template-var></div>
+					<div class="small fst-italic"><template-var>fileName</template-var></div>
+				</div>
 			</div>
 			<div class="text-end">
-				<div><template-var>usedBadge</template-var><template-var>missingBadge</template-var></div>
+				<div><template-var>retentionBadge</template-var> <template-var>usedBadge</template-var><template-var>missingBadge</template-var></div>
 				<div class="small"><template-var>size</template-var></div>
 			</div>
 		</div>
 		<div class="mt-2 d-flex flex-wrap gap-1">
 			<template-var>typeBadges</template-var>
+			<template-var>modHubStatusBadge</template-var>
 			<template-var>modHubCategoryBadges</template-var>
 			<template-var>categoryBadges</template-var>
 			<template-var>brandBadges</template-var>
 			<template-var>sourceBadges</template-var>
 			<template-var>collectionBadges</template-var>
 		</div>
+		<template-var>storeItemPreviews</template-var>
+		<div class="small mt-2"><template-var>modHubStatusLine</template-var></div>
+		<div class="small mt-2 text-body-secondary"><template-var>retentionReason</template-var></div>
 		<div class="small mt-2 text-body-secondary"><template-var>updatedAt</template-var></div>
 		<div class="row g-2 mt-2 align-items-center">
 			<div class="col-md-7">
@@ -237,16 +329,22 @@
 			</div>
 		</div>
 		<div class="small mt-2 vault-copy-result" role="status"></div>
-		<div class="mt-2">
+		<div class="mt-2 d-flex flex-wrap gap-2">
+			<button class="btn btn-sm btn-outline-secondary vault-keep-button" type="button">
+				Keep ZIP
+			</button>
+			<template-var>deleteButton</template-var>
 			<button class="btn btn-sm btn-outline-secondary vault-details-toggle" type="button">
 				Technical details
 			</button>
 		</div>
+		<template-var>deleteConfirmation</template-var>
 		<div class="collapse mt-2 vault-technical-details">
 			<div class="small vault-path user-select-text">Version labels seen: <template-var>versionLabels</template-var></div>
 			<div class="small vault-path user-select-text">ModHub categories: <template-var>modHubCategories</template-var></div>
 			<div class="small vault-path user-select-text">ModHub IDs: <template-var>modHubIDs</template-var></div>
-			<div class="small vault-path user-select-text">ModHub versions: <template-var>modHubVersions</template-var></div>
+			<div class="small vault-path user-select-text">ModHub versions previously seen: <template-var>modHubVersions</template-var></div>
+			<div class="small vault-path user-select-text">ModHub match: <template-var>modHubMatch</template-var></div>
 			<div class="small vault-path user-select-text">Game versions: <template-var>gameVersions</template-var></div>
 			<div class="small vault-path user-select-text">Path: <template-var>filePath</template-var></div>
 			<div class="small vault-path user-select-text">Fingerprint: <template-var>hash</template-var></div>

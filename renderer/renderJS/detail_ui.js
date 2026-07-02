@@ -4,7 +4,7 @@
    |__|_|__||_____|_____|___|___||_____|_____||__||_____||____|
    (c) 2022-present FSG Modding.  MIT License. */
 // MARK: DETAIL UI
-/* global DATA, MA, I18N, ft_doReplace, client_BuilderPlace, clientGetKeyMapSimple, clientGetKeyMap, clientMakeCropCalendar, client_BuilderVehicle */
+/* global DATA, MA, I18N, ft_doReplace, client_BGData, client_BuilderPlace, clientGetKeyMapSimple, clientGetKeyMap, clientMakeCropCalendar, client_BuilderVehicle */
 
 
 window.lookItemMap  = {}
@@ -59,6 +59,7 @@ class windowState {
 			
 			MA.byIdHTML('storeitems', '')
 			MA.byId('store_div').clsShow(Object.keys(this.storeInfo.vehicles).length !== 0 || Object.keys(this.storeInfo.placeables).length !== 0)
+			this.#renderStoreItemPreview()
 
 			try {
 				for ( const storeItemFile of Object.keys(this.storeInfo.vehicles).sort() ) {
@@ -122,6 +123,8 @@ class windowState {
 		MA.byId('cropcal_div')?.clsHide()
 		MA.byId('detail_crop_json')?.clsHide()
 		MA.byId('store_div')?.clsHide()
+		MA.byId('store_preview_div')?.clsHide()
+		MA.byIdHTML('store_preview_items', '')
 		MA.byId('map_image_div')?.clsHide()
 		MA.byId('malware-found')?.clsHide()
 		MA.byId('download_latest_update')?.clsHide()
@@ -179,7 +182,7 @@ class windowState {
 	// MARK: problems
 	async do_step_problems() {
 		return window.detail_IPC.getBinds().then(async (bindConflicts) => {
-			const bindingIssue     = bindConflicts[this.mod.currentCollection][this.mod.fileDetail.shortName] ?? null
+			const bindingIssue     = bindConflicts[this.mod.currentCollection]?.[this.mod.fileDetail.shortName] ?? null
 
 			if ( this.mod.issues.length === 0 && bindingIssue === null ) {
 				MA.byId('problem_div').clsHide()
@@ -237,12 +240,13 @@ class windowState {
 			has_scripts    : DATA.checkX(this.mod.modDesc.scriptFiles),
 			i3dFiles       : this.mod.fileDetail.i3dFiles.join('\n'),
 			is_multiplayer : DATA.checkX(this.mod.modDesc.multiPlayer, false),
-			mh_version     : ( this.mod.modHub.id !== null ) ?
+			mh_version     : ( this.mod.modHub.id !== null && typeof this.mod.modHub.version === 'string' ) ?
 				`<a href="https://www.farming-simulator.com/mod.php?mod_id=${this.mod.modHub.id}" target="_BLANK">${this.mod.modHub.version}</a>` :
 				`<em>${I18N.defer(this.mod.modHub.id === null ? 'mh_norecord' : 'mh_unknown', false )}</em>`,
 			mod_author     : DATA.escapeSpecial(this.mod.modDesc.author),
 			mod_collection : `${I18N.defer('detail_mod_collection', false)}: ${DATA.escapeSpecial(collectionName ?? this.mod.currentCollection)}`,
 			mod_location   : this.mod.fileDetail.fullPath,
+			modhub_status  : this.#modHubStatusHTML(),
 			store_items    : DATA.checkX(this.mod.modDesc.storeItems),
 			title          : (( tempTitle !== '--' ) ? tempTitle : this.mod.fileDetail.shortName),
 			update_source  : this.#updateSourceHTML(sourceURL),
@@ -267,6 +271,80 @@ class windowState {
 		)
 	}
 
+	#storeItemPreviewCandidates(item, itemKey = '') {
+		return [
+			item?.icon,
+			item?.iconFile,
+			item?.iconBase,
+			item?.iconOrig,
+			this.storeInfo?.icon?.[item?.icon],
+			this.storeInfo?.icon?.[item?.iconFile],
+			this.storeInfo?.icon?.[item?.iconOrig],
+			this.storeInfo?.icon?.[itemKey],
+		]
+	}
+
+	#storeItemPreviewValue(candidate) {
+		if ( typeof candidate !== 'string' || candidate === '' ) { return null }
+		if ( candidate.startsWith('data:') ) { return candidate.replace(/^(data:[^,]+,)\s*/u, '$1') }
+		if ( candidate.startsWith('$data') ) {
+			const iconPointer = candidate.replace('.png', '.dds')
+			const trueIcon = client_BGData?.icons?.[iconPointer]
+			return typeof trueIcon === 'string' ? trueIcon : null
+		}
+		const compactCandidate = candidate.replaceAll(/\s/gu, '')
+		return ( compactCandidate.length > 100 && /^[A-Za-z0-9+/]+=*$/u.test(compactCandidate) ) ?
+			`data:image/png;base64,${compactCandidate}` :
+			null
+	}
+
+	#storeItemPreviewIcon(item, itemKey = '') {
+		const iconCandidates = this.#storeItemPreviewCandidates(item, itemKey)
+		for ( const candidate of iconCandidates ) {
+			const iconValue = this.#storeItemPreviewValue(candidate)
+			if ( iconValue !== null ) { return iconValue }
+		}
+		return null
+	}
+
+	#storeItemPreviewEntries(limit = 8) {
+		const previews = []
+		const seenImages = new Set()
+		const addPreview = (item, itemKey = '') => {
+			if ( previews.length >= limit ) { return }
+			const icon = this.#storeItemPreviewIcon(item, itemKey)
+			if ( icon === null || seenImages.has(icon) ) { return }
+			seenImages.add(icon)
+			previews.push({
+				icon,
+				name : typeof item?.name === 'string' ? item.name : itemKey,
+			})
+		}
+
+		for ( const [itemKey, item] of Object.entries(this.storeInfo?.vehicles ?? {})) { addPreview(item, itemKey) }
+		for ( const [itemKey, item] of Object.entries(this.storeInfo?.placeables ?? {})) { addPreview(item, itemKey) }
+		for ( const [itemKey, item] of Object.entries(this.storeInfo?.items ?? {})) { addPreview(item, itemKey) }
+
+		return previews
+	}
+
+	#renderStoreItemPreview() {
+		const previewDiv = MA.byId('store_preview_div')
+		const previewItems = MA.byId('store_preview_items')
+		if ( previewDiv === null || previewItems === null ) { return }
+
+		const previews = this.#storeItemPreviewEntries()
+		previewItems.innerHTML = ''
+		previewDiv.clsShow(previews.length !== 0)
+		for ( const preview of previews ) {
+			const image = document.createElement('img')
+			image.alt = ''
+			image.src = DATA.iconMaker(preview.icon)
+			image.title = preview.name
+			previewItems.appendChild(image)
+		}
+	}
+
 	#updateSourceHTML(sourceURL) {
 		if ( sourceURL !== '' ) {
 			const safeURL = DATA.escapeSpecial(sourceURL)
@@ -287,6 +365,27 @@ class windowState {
 		} catch {
 			return false
 		}
+	}
+
+	#modHubStatusHTML() {
+		if ( this.mod.modHub.id === null ) {
+			return '<span class="text-body-secondary">Not matched to ModHub</span>'
+		}
+		if ( typeof this.mod.modHub.version !== 'string' || this.mod.modHub.version === '' ) {
+			return '<span class="text-info">Matched by filename; ModHub version unavailable</span>'
+		}
+
+		const comparison = DATA.versionCompare(this.mod.modDesc.version, this.mod.modHub.version)
+		if ( comparison < 0 ) {
+			return '<span class="text-warning">Update available from ModHub</span>'
+		}
+		if ( comparison === 0 ) {
+			return '<span class="text-success">Current on ModHub</span>'
+		}
+		if ( comparison > 0 ) {
+			return '<span class="text-info">Local version is newer than ModHub</span>'
+		}
+		return '<span class="text-info">Matched to ModHub; comparison unavailable</span>'
 	}
 
 	#normalizedGitHubURL(sourceURL) {
@@ -385,6 +484,10 @@ class windowState {
 	#refreshDownloadButton(result, updatePointer) {
 		const downloadButton = MA.byId('download_latest_update')
 		if ( downloadButton === null ) { return }
+		if ( this.mod.isVaultRecord ) {
+			downloadButton.clsHide()
+			return
+		}
 
 		const compareResult = DATA.versionCompare(this.mod.modDesc.version, result.version)
 		const isUpdate = compareResult < 0 || (Number.isNaN(compareResult) && DATA.versionDifferent(this.mod.modDesc.version, result.version))
@@ -429,6 +532,10 @@ class windowState {
 	async #refreshRollbackVersions(updatePointer, hasRollbackBackup = false) {
 		const rollbackDiv = MA.byId('rollback_versions')
 		if ( rollbackDiv === null ) { return }
+		if ( this.mod.isVaultRecord ) {
+			rollbackDiv.clsHide()
+			return
+		}
 
 		const entries = await window.detail_IPC.rollbackEntries(updatePointer)
 		if ( entries.length === 0 ) {
@@ -494,6 +601,10 @@ class windowState {
 	#refreshRollbackButton(updatePointer, hasRollbackBackup) {
 		const rollbackButton = MA.byId('rollback_latest_update')
 		if ( rollbackButton === null ) { return }
+		if ( this.mod.isVaultRecord ) {
+			rollbackButton.clsHide()
+			return
+		}
 
 		rollbackButton.clsShow(hasRollbackBackup)
 		if ( !hasRollbackBackup ) { return }
