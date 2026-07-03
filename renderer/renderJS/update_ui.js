@@ -58,13 +58,14 @@ function makeCandidateMap(modCollect) {
 
 			if ( thisMod.fileDetail.isFolder ) { continue }
 
-			const addCandidate = (sourceType, sourceLink, remoteVersion = null) => {
+			const addCandidate = (sourceType, sourceLink, remoteVersion = null, modHubID = null) => {
 				const candidateKey = `${modName}::${sourceType}`
 				candidates[candidateKey] ??= {
 					collectionKeys : [],
 					collections : [],
 					icon        : thisMod.modDesc.iconImage,
 					local       : new Set(),
+					modHubID,
 					modName,
 					remoteVersion,
 					sourceLabel : sourceType === 'github' ? 'GitHub' : 'ModHub',
@@ -81,7 +82,7 @@ function makeCandidateMap(modCollect) {
 
 			if ( isGitHubURL(sourceURL) ) { addCandidate('github', sourceURL) }
 			if ( thisMod.modHub.id !== null && typeof thisMod.modHub.version === 'string' && thisMod.modHub.version !== '' ) {
-				addCandidate('modhub', `https://www.farming-simulator.com/mod.php?mod_id=${thisMod.modHub.id}`, thisMod.modHub.version)
+				addCandidate('modhub', `https://www.farming-simulator.com/mod.php?mod_id=${thisMod.modHub.id}`, thisMod.modHub.version, thisMod.modHub.id)
 			}
 		}
 	}
@@ -110,7 +111,7 @@ function statusText(result) {
 }
 
 function downloadStatusText(result) {
-	if ( result.source === 'modhub' ) {
+	if ( result.source === 'modhub' && !result.hasDownload ) {
 		return '<span class="badge text-bg-secondary">Manual download from ModHub</span>'
 	}
 	if ( result.hasDownload ) {
@@ -136,12 +137,17 @@ function withTimeout(promise, timeoutMS = 15000) {
 	])
 }
 
-function modListTimeout(timeoutMS = 15000) {
-	return new Promise((resolve) => {
-		setTimeout(() => {
-			resolve(null)
-		}, timeoutMS)
-	})
+async function mapWithConcurrency(entries, limit, mapper) {
+	const results = new Array(entries.length)
+	let nextIndex = 0
+	const worker = async () => {
+		const currentIndex = nextIndex++
+		if ( currentIndex >= entries.length ) { return }
+		results[currentIndex] = await mapper(entries[currentIndex])
+		return worker()
+	}
+	await Promise.all(Array.from({ length : Math.min(limit, entries.length) }, () => worker()))
+	return results
 }
 
 let activeRenderID = 0
@@ -198,7 +204,9 @@ function getSelectedDownloadCandidates() {
 			collectionKey : checkbox.dataset.collectionKey,
 			collectionName : checkbox.dataset.collectionName,
 			fileName : checkbox.dataset.assetName,
+			modHubID : checkbox.dataset.modHubId,
 			modName  : checkbox.dataset.modName,
+			sourceType : checkbox.dataset.sourceType,
 			sourceURL : checkbox.dataset.sourceUrl,
 			url      : checkbox.dataset.downloadUrl,
 			version  : checkbox.dataset.remoteVersion,
@@ -222,7 +230,7 @@ async function downloadSelectedZIPs() {
 	updateSelectedCount()
 }
 
-async function displayCandidates(candidates, renderID) {
+async function displayCandidates(candidates, renderID, forceRemoteRefresh = false) {
 	const listDiv = MA.byId('modList')
 	const candidateEntries = Object.entries(candidates).sort((a, b) => Intl.Collator().compare(a[0], b[0]))
 	let completeCount = 0
@@ -236,16 +244,10 @@ async function displayCandidates(candidates, renderID) {
 
 	MA.byIdHTML('updateStatus', `${I18N.defer('update_list_checking', false)} 0 / ${candidateEntries.length}`)
 
-	const checkPromises = candidateEntries.map(async ([, entry]) => {
+	const updateRows = (await mapWithConcurrency(candidateEntries, 6, async ([, entry]) => {
 		const result = entry.sourceType === 'github' ?
-			await withTimeout(window.update_IPC.getGitHub(entry.sourceURL)) :
-			{
-				hasDownload : false,
-				ok          : true,
-				source      : 'modhub',
-				url         : entry.sourceURL,
-				version     : entry.remoteVersion,
-			}
+			await withTimeout(window.update_IPC.getGitHub(entry.sourceURL, forceRemoteRefresh)) :
+			await withTimeout(window.update_IPC.getModHub(entry.modHubID, forceRemoteRefresh))
 		completeCount++
 		if ( renderID === activeRenderID ) {
 			MA.byIdHTML('updateStatus', `${I18N.defer('update_list_checking', false)} ${completeCount} / ${candidateEntries.length}`)
@@ -265,6 +267,7 @@ async function displayCandidates(candidates, renderID) {
 			collectionKey  : collectionKey,
 			collectionName : collectionName,
 			downloadURL    : result.downloadURL ?? null,
+			modHubID       : entry.modHubID,
 			modName        : entry.modName,
 			node           : DATA.templateEngine('update_line', {
 				collections   : collectionList.join(''),
@@ -277,27 +280,28 @@ async function displayCandidates(candidates, renderID) {
 				sourceName    : DATA.escapeSpecial(entry.sourceLabel),
 				statusText    : statusText(result),
 			}),
+			sourceType : entry.sourceType,
 			sourceURL : entry.sourceURL,
 			version   : result.version,
 		}
-	})
-
-	const updateRows = (await Promise.all(checkPromises)).filter((x) => x !== null)
+	})).filter((x) => x !== null)
 
 	if ( renderID !== activeRenderID ) { return }
 
-	for ( const { assetName, collectionKey, collectionName, downloadURL, modName, node, sourceURL, version } of updateRows ) {
+	for ( const { assetName, collectionKey, collectionName, downloadURL, modHubID, modName, node, sourceType, sourceURL, version } of updateRows ) {
 		node.firstElementChild.classList.add('bg-warning-subtle')
 		const selectCheckbox = node.querySelector('.update-select-checkbox')
 		if ( assetName !== null ) {
 			selectCheckbox.dataset.assetName = assetName
 			selectCheckbox.dataset.collectionName = collectionName
 			selectCheckbox.dataset.collectionKey = collectionKey
+			selectCheckbox.dataset.modHubId = modHubID ?? ''
 			selectCheckbox.dataset.modName = modName
 		}
 		if ( downloadURL !== null ) { selectCheckbox.dataset.downloadUrl = downloadURL }
 		selectCheckbox.dataset.remoteVersion = version
 		selectCheckbox.dataset.sourceUrl = sourceURL
+		selectCheckbox.dataset.sourceType = sourceType
 		selectCheckbox.addEventListener('change', updateSelectedCount)
 		const sourceButton = node.querySelector('.update-source-button')
 		sourceButton.dataset.sourceUrl = sourceURL
@@ -319,7 +323,7 @@ async function displayCandidates(candidates, renderID) {
 	)
 }
 
-async function startFromModList(modCollect) {
+async function startFromModList(modCollect, forceRemoteRefresh = false) {
 	const renderID = ++activeRenderID
 
 	if ( modCollect === null ) {
@@ -332,9 +336,21 @@ async function startFromModList(modCollect) {
 		MA.byIdHTML('modList', '')
 		MA.byId('selectionControls').classList.add('d-none')
 		updateSelectedCount()
-		await displayCandidates(makeCandidateMap(modCollect), renderID)
+		await displayCandidates(makeCandidateMap(modCollect), renderID, forceRemoteRefresh)
 	} catch (err) {
 		MA.byIdText('updateStatus', `Update list error: ${err.message}`)
+	}
+}
+
+async function refreshUpdateCandidates() {
+	const button = MA.byId('refreshUpdatesButton')
+	button.disabled = true
+	MA.byIdHTML('updateStatus', `${I18N.defer('update_list_checking', false)} ${I18N.defer('update_list_loading', false)}`)
+	try {
+		const modCollect = await window.update_IPC.get()
+		await startFromModList(modCollect, true)
+	} finally {
+		button.disabled = false
 	}
 }
 
@@ -345,6 +361,7 @@ window.addEventListener('DOMContentLoaded', () => {
 	MA.byIdEventIfExists('selectNoneButton', () => { setAllSelections(false) })
 	MA.byIdEventIfExists('openSelectedButton', openSelectedSources)
 	MA.byIdEventIfExists('downloadSelectedButton', downloadSelectedZIPs)
+	MA.byIdEventIfExists('refreshUpdatesButton', refreshUpdateCandidates)
 	MA.byIdEventIfExists('historyButton', () => window.update_IPC.dispatchHistory())
 	MA.byIdEventIfExists('vaultButton', () => window.update_IPC.dispatchVault())
 
@@ -352,8 +369,4 @@ window.addEventListener('DOMContentLoaded', () => {
 		startFromModList(modCollect)
 	})
 
-	Promise.race([window.update_IPC.get(), modListTimeout()]).then((modCollect) => {
-		if ( activeRenderID !== 0 ) { return }
-		startFromModList(modCollect)
-	})
 })

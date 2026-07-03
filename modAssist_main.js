@@ -41,6 +41,7 @@ const modQueueRunner = new queueEmitter()
  * @property {function} processModFolders process mod folders
  * @property {function} readGameLog read the game log
  * @property {function} refreshClientModList refresh mod list in client
+ * @property {function} refreshUpdateList refresh update candidates after mod processing
  * @property {function} refreshTransientStatus refresh status flags in client
  * @property {function} toggleMiniWindow toggle mini window on and off
  */
@@ -50,6 +51,7 @@ serveIPC.refFunc = {
 	processModFolders      : processModFolders,
 	refreshClientModList   : refreshClientModList,
 	refreshTransientStatus : refreshTransientStatus,
+	refreshUpdateList      : refreshUpdateList,
 	toggleMiniWindow       : toggleMiniWindow,
 }
 
@@ -226,6 +228,7 @@ ipcMain.on('folders:remove', (_, CKey) => {
 				serveIPC.log.notice('folder-opts', 'Folder removed from tracking', folder)
 				funcLib.prefs.saveFolders()
 				serveIPC.modCollect.removeCollection(CKey)
+				invalidateModLibrarySummary()
 				funcLib.general.toggleFolderDirty()
 				refreshClientModList(false)
 			} else {
@@ -799,7 +802,29 @@ ipcMain.handle('settings:site', (_, mod, site = false) => {
 	return serveIPC.storeSites.get(mod, '')
 })
 
-ipcMain.handle('settings:site:githubLatest', async (_, sourceURL) => getGitHubLatestUpdate(sourceURL))
+const UPDATE_REMOTE_CACHE_MS = 1000 * 60 * 30
+const updateRemoteCache = new Map()
+const updateRemoteInFlight = new Map()
+
+async function cachedRemoteUpdate(key, force, lookup) {
+	const cached = updateRemoteCache.get(key)
+	if ( !force && typeof cached !== 'undefined' && cached.expiresAt > Date.now() ) { return cached.result }
+	if ( !force && updateRemoteInFlight.has(key) ) { return updateRemoteInFlight.get(key) }
+
+	const lookupPromise = lookup().then((result) => {
+		updateRemoteCache.set(key, { expiresAt : Date.now() + UPDATE_REMOTE_CACHE_MS, result })
+		return result
+	}).finally(() => {
+		updateRemoteInFlight.delete(key)
+	})
+	updateRemoteInFlight.set(key, lookupPromise)
+	return lookupPromise
+}
+
+ipcMain.handle('settings:site:githubLatest', async (_, sourceURL, force = false) =>
+	cachedRemoteUpdate(`github:${sourceURL}`, force, () => getGitHubLatestUpdate(sourceURL)))
+ipcMain.handle('settings:site:modHubLatest', async (_, modHubID, force = false) =>
+	cachedRemoteUpdate(`modhub:${modHubID}`, force, () => getModHubLatestUpdate(modHubID, force)))
 
 async function getGitHubLatestUpdate(sourceURL) {
 	const repoInfo = getGitHubRepoInfo(sourceURL)
@@ -1129,16 +1154,160 @@ function storeItemPreviewsFromIncludeDetail(includeDetail, limit = 12) {
 	return previews
 }
 
-function storeItemPreviewsForMod(modRecord) {
+function finiteNumber(value) {
+	if ( typeof value === 'number' && Number.isFinite(value) ) { return value }
+	if ( typeof value !== 'string' ) { return null }
+	const cleanValue = value.replaceAll(',', '').trim()
+	if ( cleanValue === '' ) { return null }
+	const parsedValue = Number.parseFloat(cleanValue)
+	return Number.isFinite(parsedValue) ? parsedValue : null
+}
+
+function numbersFromValue(value, depth = 0) {
+	if ( depth > 4 || value === null || typeof value === 'undefined' ) { return [] }
+	const directNumber = finiteNumber(value)
+	if ( directNumber !== null ) { return [directNumber] }
+	if ( Array.isArray(value) ) { return value.flatMap((entry) => numbersFromValue(entry, depth + 1)) }
+	if ( typeof value === 'object' ) { return Object.values(value).flatMap((entry) => numbersFromValue(entry, depth + 1)) }
+	return []
+}
+
+function mergeNumericRange(existingMin, existingMax, values) {
+	const cleanValues = values.filter((value) => Number.isFinite(value) && value > 0)
+	if ( cleanValues.length === 0 ) { return [existingMin ?? null, existingMax ?? null] }
+	const incomingMin = Math.min(...cleanValues)
+	const incomingMax = Math.max(...cleanValues)
+	return [
+		Number.isFinite(existingMin) ? Math.min(existingMin, incomingMin) : incomingMin,
+		Number.isFinite(existingMax) ? Math.max(existingMax, incomingMax) : incomingMax,
+	]
+}
+
+function storeItemsFromIncludeDetail(includeDetail) {
+	if ( typeof includeDetail !== 'object' || includeDetail === null ) { return [] }
+	return [
+		...Object.entries(includeDetail.items ?? {}).map(([itemKey, item]) => ({ item, itemKey, masterType : item?.masterType ?? 'item' })),
+		...Object.entries(includeDetail.vehicles ?? {}).map(([itemKey, item]) => ({ item, itemKey, masterType : item?.masterType ?? 'vehicle' })),
+		...Object.entries(includeDetail.placeables ?? {}).map(([itemKey, item]) => ({ item, itemKey, masterType : item?.masterType ?? 'placeable' })),
+	].filter(({ item }) => typeof item === 'object' && item !== null)
+}
+
+function cleanStoreItemTypeLabel(value) {
+	if ( typeof value !== 'string' ) { return '' }
+	const cleanValue = value.trim()
+	if ( cleanValue === '' || /^\$?l10n_/iu.test(cleanValue) ) { return '' }
+	return cleanValue
+}
+
+function itemTypeLabel(item, fallbackType = '') {
+	return [
+		item?.sorting?.typeName,
+		item?.sorting?.typeDescription,
+		item?.type,
+		item?.typeDesc,
+		item?.sorting?.category,
+		item?.category,
+		item?.masterType,
+		fallbackType,
+	].map((value) => cleanStoreItemTypeLabel(value)).find((value) => value !== '') ?? ''
+}
+
+function itemHorsepowerValues(item) {
+	const configuredHorsepower = (item?.motor?.motors ?? []).flatMap((motor) => {
+		const curveValues = numbersFromValue((motor?.horsePower ?? []).map((point) => point?.value))
+		return curveValues.length === 0 ? [] : [Math.max(...curveValues)]
+	})
+	const candidates = [
+		item?.horsepower,
+		item?.hp,
+		item?.power,
+		item?.maxPower,
+		item?.minPower,
+		item?.needPower,
+		item?.neededPower,
+		item?.motorInfo?.hp,
+		item?.specs?.specs?.power,
+		configuredHorsepower,
+	]
+	return uniqueCleanNumberArray(numbersFromValue(candidates).filter((value) => value > 0 && value < 5000))
+}
+
+function itemPriceValues(item) {
+	return uniqueCleanNumberArray(numbersFromValue([
+		item?.price,
+		item?.specs?.price,
+	]).filter((value) => value > 0))
+}
+
+function equipmentSpecsFromIncludeDetail(includeDetail) {
+	const metadata = {
+		fillLevelMax  : null,
+		horsepowerMax : null,
+		horsepowerMin : null,
+		priceMax      : null,
+		priceMin      : null,
+		speedLimitMax : null,
+		weightMax     : null,
+	}
+	const itemBrands = []
+	const itemCategories = []
+	const storeItemTypes = []
+
+	for ( const { item, masterType } of storeItemsFromIncludeDetail(includeDetail) ) {
+		itemBrands.push(item.brand, item?.sorting?.brand)
+		itemCategories.push(item.category, item?.sorting?.category)
+		storeItemTypes.push(itemTypeLabel(item, masterType))
+
+		const [priceMin, priceMax] = mergeNumericRange(metadata.priceMin, metadata.priceMax, itemPriceValues(item))
+		metadata.priceMin = priceMin
+		metadata.priceMax = priceMax
+
+		const [horsepowerMin, horsepowerMax] = mergeNumericRange(metadata.horsepowerMin, metadata.horsepowerMax, itemHorsepowerValues(item))
+		metadata.horsepowerMin = horsepowerMin
+		metadata.horsepowerMax = horsepowerMax
+
+		const [, speedLimitMax] = mergeNumericRange(null, metadata.speedLimitMax, numbersFromValue([
+			item.speedLimit,
+			item?.specs?.specs?.maxSpeed,
+			(item?.motor?.motors ?? []).map((motor) => motor?.maxSpeed),
+		]).filter((value) => value > 0 && value < 300))
+		metadata.speedLimitMax = speedLimitMax
+		const [, fillLevelMax] = mergeNumericRange(null, metadata.fillLevelMax, numbersFromValue([
+			item.fillLevel,
+			item?.fillSpray?.fillLevel,
+		]).filter((value) => value > 0))
+		metadata.fillLevelMax = fillLevelMax
+		const [, weightMax] = mergeNumericRange(null, metadata.weightMax, numbersFromValue([
+			item.weight,
+			item?.specs?.weight,
+		]).filter((value) => value > 0))
+		metadata.weightMax = weightMax
+	}
+
+	return {
+		equipmentSpecs : metadata,
+		itemBrands     : uniqueCleanArray(itemBrands),
+		itemCategories : uniqueCleanArray(itemCategories),
+		storeItemTypes : uniqueCleanArray(storeItemTypes.map((value) => cleanStoreItemTypeLabel(value))),
+	}
+}
+
+function storeItemVaultMetadataForMod(modRecord) {
 	const storeItems = Number.parseInt(modRecord?.modDesc?.storeItems ?? 0, 10) || 0
-	if ( storeItems === 0 || typeof modRecord?.fileDetail?.fullPath !== 'string' ) { return [] }
+	if ( storeItems === 0 || typeof modRecord?.fileDetail?.fullPath !== 'string' ) {
+		return { equipmentSpecs : {}, itemBrands : [], itemCategories : [], storeItemPreviews : [], storeItemTypes : [] }
+	}
 
 	try {
 		const detailRecord = JSON.parse(parseModLastPass(modRecord.fileDetail.fullPath))
-		return storeItemPreviewsFromIncludeDetail(detailRecord.includeDetail)
+		const includeDetail = detailRecord.includeDetail
+		return {
+			...equipmentSpecsFromIncludeDetail(includeDetail),
+			storeItemPreviews : storeItemPreviewsFromIncludeDetail(includeDetail),
+		}
 	} catch (err) {
-		serveIPC.log.warning('mod-vault', `Could not read store item images for ${modRecord.fileDetail.shortName}`, err.message)
-		return []
+		serveIPC.log.warning('mod-vault', `Could not read store item metadata for ${modRecord.fileDetail.shortName}`, err.message)
+		return { equipmentSpecs : {}, itemBrands : [], itemCategories : [], storeItemPreviews : [], storeItemTypes : [] }
 	}
 }
 
@@ -1163,13 +1332,15 @@ function collectionModVaultMetadata(modRecord, collectKey) {
 	const sourceURL = serveIPC.storeSites.get(modRecord.fileDetail.shortName, null)
 	const modHubRecord = modRecord.modHub ?? {}
 	const modHubMetadata = getCachedModHubMetadata(modHubRecord.id)
+	const storeItemMetadata = storeItemVaultMetadataForMod(modRecord)
 
 	return {
 		collectionName,
+		equipmentSpecs : storeItemMetadata.equipmentSpecs,
 		fileName       : path.basename(modRecord.fileDetail.fullPath),
 		gameVersion    : modRecord.gameVersion,
-		itemBrands     : safeModArray(modRecord.has_brands),
-		itemCategories : safeModArray(modRecord.has_cats),
+		itemBrands     : uniqueCleanArray([...safeModArray(modRecord.has_brands), ...storeItemMetadata.itemBrands]),
+		itemCategories : uniqueCleanArray([...safeModArray(modRecord.has_cats), ...storeItemMetadata.itemCategories]),
 		mapConfigFile  : modRecord.modDesc?.mapConfigFile ?? null,
 		modHubCategory : modHubMetadata?.category ?? null,
 		modHubCategoryPath : modHubMetadata?.categoryPath ?? [],
@@ -1181,8 +1352,9 @@ function collectionModVaultMetadata(modRecord, collectKey) {
 		scriptFiles    : Number.parseInt(modRecord.modDesc?.scriptFiles ?? 0, 10) || 0,
 		source         : 'Collection',
 		sourceURL,
-		storeItemPreviews : storeItemPreviewsForMod(modRecord),
+		storeItemPreviews : storeItemMetadata.storeItemPreviews,
 		storeItems     : Number.parseInt(modRecord.modDesc?.storeItems ?? 0, 10) || 0,
+		storeItemTypes : storeItemMetadata.storeItemTypes,
 		version        : modRecord.modDesc?.version ?? null,
 	}
 }
@@ -1245,6 +1417,19 @@ function extractModHubCategory(html, compactText = modHubTextLines(html)) {
 	return null
 }
 
+function extractModHubDownloadURL(html) {
+	for ( const match of html.matchAll(/href\s*=\s*["']([^"']+\.zip(?:\?[^"']*)?)["']/giu) ) {
+		try {
+			const downloadURL = new URL(decodeHTMLEntities(match[1]), 'https://www.farming-simulator.com/')
+			const isOfficialCDN = /^cdn\d+\.giants-software\.com$/iu.test(downloadURL.hostname)
+			if ( downloadURL.protocol === 'https:' && isOfficialCDN && downloadURL.pathname.startsWith('/modHub/storage/') ) {
+				return downloadURL.toString()
+			}
+		} catch { /* Ignore malformed links and continue looking for the official CDN ZIP. */ }
+	}
+	return null
+}
+
 async function fetchModHubMetadata(modHubID, { force = false } = {}) {
 	if ( modHubID === null || typeof modHubID === 'undefined' ) { return null }
 
@@ -1257,6 +1442,7 @@ async function fetchModHubMetadata(modHubID, { force = false } = {}) {
 		category     : null,
 		categoryPath : [],
 		checkedAt    : new Date().toISOString(),
+		downloadURL  : null,
 		fileName     : null,
 		id           : idString,
 		ok           : false,
@@ -1272,6 +1458,7 @@ async function fetchModHubMetadata(modHubID, { force = false } = {}) {
 		const category = extractModHubCategory(html, compactText)
 		metadata.category = category
 		metadata.categoryPath = category === null ? [] : [category]
+		metadata.downloadURL = extractModHubDownloadURL(html)
 		metadata.fileName = extractModHubDetail(compactText, 'filename')
 		metadata.version = extractModHubDetail(compactText, 'version')
 		metadata.ok = category !== null || metadata.fileName !== null || metadata.version !== null
@@ -1280,7 +1467,32 @@ async function fetchModHubMetadata(modHubID, { force = false } = {}) {
 	}
 
 	serveIPC.storeLibrary.set(`modHub.${idString}`, metadata)
+	invalidateModLibrarySummary()
 	return metadata
+}
+
+async function getModHubLatestUpdate(modHubID, force = false) {
+	if ( modHubID === null || typeof modHubID === 'undefined' ) {
+		return { ok : false, error : 'missing_modhub_id' }
+	}
+
+	const cached = getCachedModHubMetadata(modHubID)
+	const metadata = await fetchModHubMetadata(modHubID, { force : force || cached?.downloadURL === null || typeof cached?.downloadURL === 'undefined' })
+	if ( metadata?.ok !== true || typeof metadata.version !== 'string' ) {
+		return { ok : false, error : metadata?.error ?? 'modhub_metadata_unavailable' }
+	}
+
+	const assetName = metadata.fileName ?? (typeof metadata.downloadURL === 'string' ? path.basename(new URL(metadata.downloadURL).pathname) : null)
+	return {
+		assetName,
+		downloadURL : metadata.downloadURL,
+		hasDownload : typeof metadata.downloadURL === 'string' && typeof assetName === 'string' && assetName.toLowerCase().endsWith('.zip'),
+		modHubID    : metadata.id,
+		ok          : true,
+		source      : 'modhub',
+		url         : metadata.url,
+		version     : metadata.version,
+	}
 }
 
 async function sha256File(filePath) {
@@ -1322,6 +1534,12 @@ function getStoredModLibraryRecords() {
 	))
 }
 
+let modLibrarySummaryCache = null
+
+function invalidateModLibrarySummary() {
+	modLibrarySummaryCache = null
+}
+
 const vaultDetailCache = new Map()
 
 function getVaultDetailRecord(hash) {
@@ -1352,6 +1570,26 @@ function getVaultDetailRecord(hash) {
 	const result = [parsedRecord, detailRecord]
 	vaultDetailCache.set(hash, result)
 	return result
+}
+
+function mergeEquipmentSpecs(existingSpecs = {}, incomingSpecs = {}) {
+	const mergedSpecs = {}
+	for ( const field of ['priceMin', 'priceMax', 'horsepowerMin', 'horsepowerMax', 'speedLimitMax', 'fillLevelMax', 'weightMax'] ) {
+		const existingValue = finiteNumber(existingSpecs[field])
+		const incomingValue = finiteNumber(incomingSpecs[field])
+		if ( existingValue === null && incomingValue === null ) { continue }
+		if ( field.endsWith('Min') ) {
+			mergedSpecs[field] = existingValue === null ? incomingValue : (incomingValue === null ? existingValue : Math.min(existingValue, incomingValue))
+		} else {
+			mergedSpecs[field] = existingValue === null ? incomingValue : (incomingValue === null ? existingValue : Math.max(existingValue, incomingValue))
+		}
+	}
+	return mergedSpecs
+}
+
+function safeEquipmentSpecs(value) {
+	if ( typeof value !== 'object' || value === null || Array.isArray(value) ) { return {} }
+	return mergeEquipmentSpecs({}, value)
 }
 
 // eslint-disable-next-line complexity
@@ -1386,6 +1624,7 @@ async function registerModLibraryFile(filePath, metadata = {}) {
 	records[hash] = {
 		...existingRecord,
 		collections : uniqueCleanArray([...(existingRecord.collections ?? []), metadata.collectionName]),
+		equipmentSpecs : mergeEquipmentSpecs(existingRecord.equipmentSpecs ?? {}, metadata.equipmentSpecs ?? {}),
 		fileName    : existingRecord.fileName ?? fileName,
 		filePath    : libraryPath,
 		gameVersions : uniqueCleanNumberArray([...(existingRecord.gameVersions ?? []), metadata.gameVersion]),
@@ -1406,11 +1645,14 @@ async function registerModLibraryFile(filePath, metadata = {}) {
 		sourceURL   : metadata.sourceURL ?? existingRecord.sourceURL ?? null,
 		storeItemPreviews : mergeStoreItemPreviews([existingRecord.storeItemPreviews ?? [], metadata.storeItemPreviews ?? []]),
 		storeItems  : Math.max(existingRecord.storeItems ?? 0, metadata.storeItems ?? 0),
+		storeItemTypes : uniqueCleanArray([...(existingRecord.storeItemTypes ?? []), ...(metadata.storeItemTypes ?? [])]
+			.map((value) => cleanStoreItemTypeLabel(value))),
 		updatedAt   : new Date().toISOString(),
 		versions    : uniqueCleanArray([...(existingRecord.versions ?? []), metadata.version]),
 	}
 
 	serveIPC.storeLibrary.set('records', records)
+	invalidateModLibrarySummary()
 
 	return {
 		fileName,
@@ -1464,6 +1706,7 @@ function saveVaultNote({ modName, note } = {}) {
 		}
 	}
 	serveIPC.storeLibrary.set('notes', notes)
+	invalidateModLibrarySummary()
 
 	return {
 		key    : noteKey,
@@ -1477,15 +1720,56 @@ function currentVaultCollectionNames() {
 		.filter((collectionName) => typeof collectionName === 'string' && collectionName !== ''))
 }
 
-function modLibraryRetentionInfo({ fileExists, isUsed, keepPinned, sources } = {}) {
+const MOD_LIBRARY_DEFAULT_RETENTION_COUNT = 3
+const MOD_LIBRARY_MAX_RETENTION_COUNT = 10
+
+function getModLibraryRetentionCount() {
+	const storedCount = Number.parseInt(serveIPC.storeLibrary.get('retentionVersionCount', MOD_LIBRARY_DEFAULT_RETENTION_COUNT), 10)
+	return Number.isInteger(storedCount) ? Math.min(MOD_LIBRARY_MAX_RETENTION_COUNT, Math.max(1, storedCount)) : MOD_LIBRARY_DEFAULT_RETENTION_COUNT
+}
+
+function modLibraryRetentionIdentity(entry) {
+	const modName = entry.modNames?.[0] ?? path.parse(entry.fileName ?? '').name
+	return modName.trim().toLocaleLowerCase()
+}
+
+function compareModLibraryRetentionEntries(left, right) {
+	const leftVersion = newestKnownVersion(left.versions)
+	const rightVersion = newestKnownVersion(right.versions)
+	const versionComparison = compareModVersions(leftVersion, rightVersion)
+	if ( !Number.isNaN(versionComparison) && versionComparison !== 0 ) { return versionComparison * -1 }
+	return (right.updatedAt ?? right.createdAt ?? '').localeCompare(left.updatedAt ?? left.createdAt ?? '')
+}
+
+function modLibraryRetentionInfo({ fileExists, isCurrent, isRetained, isUsed, keepPinned, retentionCount, sources } = {}) {
 	const cleanSources = Array.isArray(sources) ? sources : []
 	const hasRollbackCurrent = cleanSources.includes('Rollback current')
+
+	if ( !fileExists ) {
+		return {
+			cleanupEligible : false,
+			retentionLabel  : 'Record only',
+			retentionReason : 'The Vault record exists, but the ZIP file is missing. Cleanup will not delete anything for this row.',
+			retentionStatus : 'record-only',
+		}
+	}
 
 	if ( keepPinned ) {
 		return {
 			cleanupEligible : false,
 			retentionLabel  : 'Kept',
-			retentionReason : 'Protected because you marked this Vault ZIP to keep.',
+			retentionReason : isCurrent ?
+				'Protected because you marked this Vault ZIP to keep. This exact ZIP is also currently present in a monitored collection.' :
+				'Protected because you marked this Vault ZIP to keep.',
+			retentionStatus : 'protected',
+		}
+	}
+
+	if ( isCurrent ) {
+		return {
+			cleanupEligible : false,
+			retentionLabel  : 'Current',
+			retentionReason : 'Protected because this exact ZIP is currently present in a monitored collection.',
 			retentionStatus : 'protected',
 		}
 	}
@@ -1508,19 +1792,19 @@ function modLibraryRetentionInfo({ fileExists, isUsed, keepPinned, sources } = {
 		}
 	}
 
-	if ( !fileExists ) {
+	if ( isRetained ) {
 		return {
 			cleanupEligible : false,
-			retentionLabel  : 'Record only',
-			retentionReason : 'The Vault record exists, but the ZIP file is missing. Cleanup will not delete anything for this row.',
-			retentionStatus : 'record-only',
+			retentionLabel  : 'Retained',
+			retentionReason : `Protected by the retention policy because this is one of the newest ${retentionCount} stored version${retentionCount === 1 ? '' : 's'} of this mod.`,
+			retentionStatus : 'protected',
 		}
 	}
 
 	return {
 		cleanupEligible : true,
 		retentionLabel  : 'Cleanable',
-		retentionReason : 'Safe cleanup candidate because no collection history or rollback record currently references this ZIP.',
+		retentionReason : `Older than the newest ${retentionCount} stored version${retentionCount === 1 ? '' : 's'} and not current, kept, rollback-protected, or history-referenced.`,
 		retentionStatus : 'cleanable',
 	}
 }
@@ -1529,9 +1813,10 @@ function getModLibraryEntries() {
 	const records = getStoredModLibraryRecords()
 	const historyEntries = serveIPC.storeHistory.get('entries', [])
 	const currentCollectionNames = currentVaultCollectionNames()
+	const retentionCount = getModLibraryRetentionCount()
 	const usedHashes = new Set(historyEntries.flatMap((entry) => [entry.backupHash, entry.currentHash]).filter((value) => typeof value === 'string'))
 	const usedPaths = new Set(historyEntries.flatMap((entry) => [entry.backupPath, entry.currentLibraryPath]).filter((value) => typeof value === 'string'))
-	return Object.entries(records)
+	const baseEntries = Object.entries(records)
 		// eslint-disable-next-line complexity
 		.map(([recordHash, record]) => {
 			const fileExists = typeof record?.filePath === 'string' && fs.existsSync(record.filePath)
@@ -1541,16 +1826,17 @@ function getModLibraryEntries() {
 			const keepPinned = record.keepPinned === true
 			const sources = Array.isArray(record.sources) ? record.sources : []
 			const isUsed = usedHashes.has(hash) || usedPaths.has(record.filePath)
-			const retentionInfo = modLibraryRetentionInfo({ fileExists, isUsed, keepPinned, sources })
+			const collections = Array.isArray(record.collections) ? record.collections.filter((collectionName) => currentCollectionNames.has(collectionName)) : []
 			return {
-				cleanupEligible : retentionInfo.cleanupEligible,
-				collections  : Array.isArray(record.collections) ? record.collections.filter((collectionName) => currentCollectionNames.has(collectionName)) : [],
+				collections,
 				createdAt    : record.createdAt ?? null,
+				equipmentSpecs : safeEquipmentSpecs(record.equipmentSpecs),
 				fileExists   : fileExists,
 				fileName     : record.fileName ?? path.basename(record.filePath ?? ''),
 				filePath     : record.filePath ?? null,
 				gameVersions : Array.isArray(record.gameVersions) ? record.gameVersions : [],
 				hash         : hash,
+				isCurrent    : collections.length !== 0,
 				isUsed       : isUsed,
 				itemBrands   : Array.isArray(record.itemBrands) ? record.itemBrands : [],
 				itemCategories : Array.isArray(record.itemCategories) ? record.itemCategories : [],
@@ -1568,24 +1854,51 @@ function getModLibraryEntries() {
 				modIcon      : record.modIcon ?? null,
 				modNames     : Array.isArray(record.modNames) ? record.modNames : [],
 				modTypes     : Array.isArray(record.modTypes) ? record.modTypes : [],
-				retentionLabel : retentionInfo.retentionLabel,
-				retentionReason : retentionInfo.retentionReason,
-				retentionStatus : retentionInfo.retentionStatus,
 				scriptFiles  : Number.isFinite(record.scriptFiles) ? record.scriptFiles : 0,
 				size         : size,
 				sources      : sources,
 				sourceURL    : record.sourceURL ?? null,
 				storeItemPreviews : Array.isArray(record.storeItemPreviews) ? record.storeItemPreviews : [],
 				storeItems   : Number.isFinite(record.storeItems) ? record.storeItems : 0,
+				storeItemTypes : Array.isArray(record.storeItemTypes) ?
+					record.storeItemTypes.map((value) => cleanStoreItemTypeLabel(value)).filter((value) => value !== '') : [],
 				updatedAt    : record.updatedAt ?? null,
 				versions     : Array.isArray(record.versions) ? record.versions : [],
+			}
+		})
+
+	const retentionGroups = new Map()
+	for ( const entry of baseEntries.filter((candidate) => candidate.fileExists) ) {
+		const identity = modLibraryRetentionIdentity(entry)
+		if ( !retentionGroups.has(identity) ) { retentionGroups.set(identity, []) }
+		retentionGroups.get(identity).push(entry)
+	}
+	const retainedHashes = new Set([...retentionGroups.values()]
+		.flatMap((entries) => entries.toSorted(compareModLibraryRetentionEntries).slice(0, retentionCount).map((entry) => entry.hash)))
+
+	return baseEntries
+		.map((entry) => {
+			const retentionInfo = modLibraryRetentionInfo({
+				fileExists     : entry.fileExists,
+				isCurrent      : entry.isCurrent,
+				isRetained     : retainedHashes.has(entry.hash),
+				isUsed         : entry.isUsed,
+				keepPinned     : entry.keepPinned,
+				retentionCount,
+				sources        : entry.sources,
+			})
+			return {
+				...entry,
+				cleanupEligible : retentionInfo.cleanupEligible,
+				retentionLabel  : retentionInfo.retentionLabel,
+				retentionReason : retentionInfo.retentionReason,
+				retentionStatus : retentionInfo.retentionStatus,
 			}
 		})
 		.sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''))
 }
 
-function getModLibraryCleanupPreview() {
-	const entries = getModLibraryEntries()
+function getModLibraryCleanupPreview(entries = getModLibraryEntries()) {
 	const cleanupEntries = entries
 		.filter((entry) => entry.cleanupEligible)
 		.map((entry) => ({
@@ -1664,6 +1977,7 @@ async function cleanupUnusedModLibraryFiles({ hashes } = {}) {
 	}
 
 	serveIPC.storeLibrary.set('records', records)
+	invalidateModLibrarySummary()
 
 	return {
 		deleted,
@@ -1688,39 +2002,60 @@ function setModLibraryKeepPinned({ hash, keepPinned } = {}) {
 		updatedAt  : new Date().toISOString(),
 	}
 	serveIPC.storeLibrary.set('records', records)
+	invalidateModLibrarySummary()
+	const entries = getModLibraryEntries()
 
 	return {
-		entry : getModLibraryEntries().find((candidate) => candidate.hash === hash) ?? null,
+		cleanup : getModLibraryCleanupPreview(entries),
+		entry : entries.find((candidate) => candidate.hash === hash) ?? null,
 		ok : true,
+	}
+}
+
+function setModLibraryRetentionCount({ count } = {}) {
+	const retentionCount = Number.parseInt(count, 10)
+	if ( !Number.isInteger(retentionCount) || retentionCount < 1 || retentionCount > MOD_LIBRARY_MAX_RETENTION_COUNT ) {
+		throw new Error(`Choose a retention count between 1 and ${MOD_LIBRARY_MAX_RETENTION_COUNT}.`)
+	}
+
+	serveIPC.storeLibrary.set('retentionVersionCount', retentionCount)
+	invalidateModLibrarySummary()
+	return {
+		ok      : true,
 		summary : getModLibrarySummary(),
 	}
 }
 
 function getModLibrarySummary() {
+	if ( modLibrarySummaryCache !== null ) { return modLibrarySummaryCache }
+
+	const startedAt = performance.now()
 	const entries = getModLibraryEntries()
 
-	return {
-		cleanup    : getModLibraryCleanupPreview(),
+	modLibrarySummaryCache = {
+		cleanup    : getModLibraryCleanupPreview(entries),
 		entries,
 		folder     : modLibraryFolder(),
 		notes      : getVaultNotes(),
+		retentionPolicy : {
+			maximum : MOD_LIBRARY_MAX_RETENTION_COUNT,
+			versionCount : getModLibraryRetentionCount(),
+		},
 		totalCount : entries.length,
 		totalSize  : entries.reduce((sum, entry) => sum + entry.size, 0),
 		usedCount  : entries.filter((entry) => entry.isUsed).length,
 	}
+	serveIPC.log.info('performance', `Built Vault summary for ${entries.length} stored ZIPs in ${(performance.now() - startedAt).toFixed(1)} ms`)
+	return modLibrarySummaryCache
 }
 
 async function getVaultCollections() {
-	const collectionData = await serveIPC.modCollect.toRenderer()
-	const collectionKeys = collectionData.set_Collections?.size > 0 ?
-		[...collectionData.set_Collections] :
-		Object.keys(collectionData.collectionToFolder ?? {})
-
-	return collectionKeys
+	await serveIPC.modCollect.processPromise
+	return [...serveIPC.modCollect.collections]
 		.map((collectionKey) => ({
 			key  : collectionKey,
-			name : collectionData.collectionToName?.[collectionKey] ?? collectionKey,
-			path : collectionData.collectionToFolder?.[collectionKey],
+			name : serveIPC.modCollect.mapCollectionToName(collectionKey) ?? collectionKey,
+			path : serveIPC.modCollect.mapCollectionToFolder(collectionKey),
 		}))
 		.filter((collection) => typeof collection.path === 'string' && collection.path !== '')
 		.sort((a, b) => a.name.localeCompare(b.name))
@@ -1750,6 +2085,122 @@ function vaultDetailTarget({ collections = [], fileName = '', hash = '', modName
 	return null
 }
 
+function dependencyLabel(dependency) {
+	if ( typeof dependency === 'string' ) { return dependency }
+	if ( typeof dependency !== 'object' || dependency === null ) { return '' }
+	for ( const key of ['title', 'name', 'modName', 'fileName', 'shortName', 'id'] ) {
+		if ( typeof dependency[key] === 'string' && dependency[key] !== '' ) { return dependency[key] }
+	}
+	return Object.values(dependency).find((value) => typeof value === 'string' && value !== '') ?? ''
+}
+
+function dependencyListForVaultHash(hash) {
+	try {
+		const [parsedRecord] = getVaultDetailRecord(hash)
+		return uniqueCleanArray((parsedRecord?.modDesc?.depend ?? []).map((dependency) => dependencyLabel(dependency)))
+	} catch {
+		return []
+	}
+}
+
+function noteWarningForVaultRecord(record) {
+	const noteKey = vaultNoteKey(record.modNames?.[0] ?? path.parse(record.fileName ?? '').name)
+	const note = getVaultNotes()[noteKey]?.note
+	if ( typeof note !== 'string' || note.trim() === '' ) { return null }
+	const conflictPattern = /\b(conflict|incompatible|crash|broken|avoid|problem|issue)\b/iu
+	if ( !conflictPattern.test(note) ) { return null }
+	return note
+}
+
+function vaultCopyPreviewItem(record, hash, selectedCollection) {
+	const fileName = safeDownloadFileName(record.fileName ?? path.basename(record.filePath ?? ''))
+	const modName = record.modNames?.[0] ?? path.basename(fileName, path.extname(fileName))
+	const targetPath = path.join(selectedCollection.path, fileName)
+	const targetExists = fs.existsSync(targetPath)
+	const existingMod = getCollectionModRecord(selectedCollection.key, path.basename(fileName, path.extname(fileName)))
+	const targetVersion = existingMod?.modDesc?.version ?? null
+	const vaultVersion = newestKnownVersion(record.versions)
+	const versionComparison = typeof targetVersion === 'string' && typeof vaultVersion === 'string' ?
+		compareModVersions(vaultVersion, targetVersion) :
+		Number.NaN
+	const warnings = []
+	const dependencies = dependencyListForVaultHash(hash)
+	const conflictNote = noteWarningForVaultRecord(record)
+
+	if ( targetExists ) {
+		warnings.push(`${fileName} already exists in ${selectedCollection.name}; copying will replace it and save a backup first.`)
+	}
+	if ( !Number.isNaN(versionComparison) ) {
+		if ( versionComparison < 0 ) {
+			warnings.push(`Vault version ${vaultVersion} appears older than the collection version ${targetVersion}.`)
+		} else if ( versionComparison === 0 && targetExists ) {
+			warnings.push(`Vault version ${vaultVersion} appears to match the collection version already installed.`)
+		} else if ( versionComparison > 0 && targetExists ) {
+			warnings.push(`Vault version ${vaultVersion} appears newer than the installed version ${targetVersion}.`)
+		}
+	}
+	if ( dependencies.length !== 0 ) {
+		warnings.push(`Dependencies listed: ${dependencies.join(', ')}.`)
+	}
+	if ( conflictNote !== null ) {
+		warnings.push('This mod has a Vault note mentioning a possible conflict or issue.')
+	}
+
+	return {
+		conflictNote,
+		dependencies,
+		fileName,
+		hash,
+		modName,
+		ok : true,
+		targetExists,
+		targetPath,
+		targetVersion,
+		vaultVersion,
+		versionComparison : Number.isNaN(versionComparison) ? null : versionComparison,
+		warnings,
+	}
+}
+
+async function previewVaultCopyToCollection({ collectionKey, hashes } = {}) {
+	if ( typeof collectionKey !== 'string' || collectionKey === '' ) { throw new Error('No collection was selected.') }
+	if ( !Array.isArray(hashes) || hashes.length === 0 ) { throw new Error('No Vault ZIPs were selected.') }
+
+	const availableCollections = await getVaultCollections()
+	const selectedCollection = availableCollections.find((collection) => collection.key === collectionKey)
+	if ( typeof selectedCollection === 'undefined' ) { throw new Error('The selected collection is no longer available.') }
+
+	const records = getStoredModLibraryRecords()
+	const items = uniqueCleanArray(hashes).map((hash) => {
+		const record = records[hash]
+		if ( typeof record === 'undefined' ) {
+			return {
+				error : 'Vault ZIP record could not be found.',
+				hash,
+				ok : false,
+				warnings : ['Vault ZIP record could not be found.'],
+			}
+		}
+		if ( typeof record.filePath !== 'string' || !fs.existsSync(record.filePath) ) {
+			return {
+				error : 'Vault ZIP file could not be found on disk.',
+				fileName : record.fileName ?? hash,
+				hash,
+				ok : false,
+				warnings : ['Vault ZIP file could not be found on disk.'],
+			}
+		}
+		return vaultCopyPreviewItem(record, hash, selectedCollection)
+	})
+
+	return {
+		collectionName : selectedCollection.name,
+		items,
+		ok : items.every((item) => item.ok),
+		warningCount : items.reduce((sum, item) => sum + (item.warnings?.length ?? 0), 0),
+	}
+}
+
 // eslint-disable-next-line complexity
 async function copyVaultRecordToCollection({ collectionKey, hash, overwrite = false } = {}) {
 	if ( typeof hash !== 'string' || hash === '' ) { throw new Error('No vault ZIP was selected.') }
@@ -1769,6 +2220,7 @@ async function copyVaultRecordToCollection({ collectionKey, hash, overwrite = fa
 
 	await fsPromise.mkdir(collectionFolder, { recursive : true })
 
+	const sourceIntegrity = validateModZipIntegrity(record.filePath, { label : 'Vault ZIP' })
 	const fileName = safeDownloadFileName(record.fileName ?? path.basename(record.filePath))
 	const targetPath = path.join(collectionFolder, fileName)
 	const targetExists = fs.existsSync(targetPath)
@@ -1800,8 +2252,7 @@ async function copyVaultRecordToCollection({ collectionKey, hash, overwrite = fa
 		}
 
 	await fsPromise.copyFile(record.filePath, targetPath)
-	const copiedFile = await fsPromise.stat(targetPath)
-	if ( !copiedFile.isFile() || copiedFile.size === 0 ) { throw new Error('The copied ZIP could not be verified in the collection.') }
+	const copiedIntegrity = validateModZipIntegrity(targetPath, { expectedVersion : sourceIntegrity.version, label : 'Copied collection ZIP' })
 
 	addCollectionHistoryEntry({
 		action             : 'vault_copied',
@@ -1810,8 +2261,10 @@ async function copyVaultRecordToCollection({ collectionKey, hash, overwrite = fa
 		collectionName,
 		currentHash        : record.hash ?? hash,
 		currentLibraryPath : record.filePath,
-		currentVersion     : Array.isArray(record.versions) ? (record.versions[0] ?? null) : null,
+		currentVersion     : sourceIntegrity.version ?? (Array.isArray(record.versions) ? (record.versions[0] ?? null) : null),
 		fileName,
+		integrityChecked   : true,
+		integrityVersion   : copiedIntegrity.version,
 		modName            : record.modNames?.[0] ?? targetModName,
 		previousVersion    : existingMod?.modDesc?.version ?? null,
 		replacedExisting   : targetExists,
@@ -1829,6 +2282,7 @@ async function copyVaultRecordToCollection({ collectionKey, hash, overwrite = fa
 			updatedAt   : new Date().toISOString(),
 		}
 		serveIPC.storeLibrary.set('records', updatedRecords)
+		invalidateModLibrarySummary()
 	}
 
 	funcLib.general.toggleFolderDirty()
@@ -1858,6 +2312,7 @@ async function importCollectionsToVault() {
 		records[hash] = { ...record, collections : [] }
 	}
 	serveIPC.storeLibrary.set('records', records)
+	invalidateModLibrarySummary()
 
 	for ( const collectKey of serveIPC.modCollect.collections ) {
 		const mods = serveIPC.modCollect.getModListFromCollection(collectKey)
@@ -1948,6 +2403,7 @@ async function refreshVaultModHubMetadata() {
 		}
 	}
 	serveIPC.storeLibrary.set('records', records)
+	invalidateModLibrarySummary()
 
 	return {
 		errors,
@@ -1998,6 +2454,11 @@ async function downloadGitHubZipToPath(download, filePath) {
 	try {
 		await new Promise((resolve, reject) => {
 			const request = net.request(download.url)
+			if ( /^cdn\d+\.giants-software\.com$/iu.test(url.hostname) ) {
+				request.setHeader('Accept', 'application/zip, application/octet-stream;q=0.9, */*;q=0.8')
+				request.setHeader('Referer', 'https://www.farming-simulator.com/')
+				request.setHeader('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) FSG-Mod-Assistant')
+			}
 			request.on('response', (response) => {
 				if ( response.statusCode < 200 || response.statusCode >= 400 ) {
 					reject(new Error(`Download failed with status ${response.statusCode}`))
@@ -2025,12 +2486,47 @@ async function downloadGitHubZipToPath(download, filePath) {
 	}
 }
 
+function validateModZipIntegrity(filePath, { expectedVersion = null, label = 'Mod ZIP' } = {}) {
+	if ( typeof filePath !== 'string' || !fs.existsSync(filePath) ) {
+		throw new Error(`${label} could not be found.`)
+	}
+
+	const fileStats = fs.statSync(filePath)
+	if ( !fileStats.isFile() || fileStats.size === 0 ) {
+		throw new Error(`${label} is empty or is not a file.`)
+	}
+
+	let parsedMod
+	try {
+		parsedMod = JSON.parse(parseModLastPass(filePath))
+	} catch {
+		throw new Error(`${label} is not a readable Farming Simulator mod ZIP.`)
+	}
+
+	const downloadedVersion = parsedMod?.modDesc?.version
+	if ( typeof downloadedVersion !== 'string' || downloadedVersion === '' ) {
+		throw new Error(`${label} does not contain a readable mod version.`)
+	}
+	if ( typeof expectedVersion === 'string' && expectedVersion !== '' && compareModVersions(downloadedVersion, expectedVersion) !== 0 ) {
+		throw new Error(`${label} contains version ${downloadedVersion}, but version ${expectedVersion} was expected.`)
+	}
+
+	return {
+		fileName : path.basename(filePath),
+		modName  : parsedMod?.fileDetail?.shortName ?? path.basename(filePath, path.extname(filePath)),
+		ok       : true,
+		size     : fileStats.size,
+		version  : downloadedVersion,
+	}
+}
+
 function getCollectionModRecord(collectionKey, modName) {
 	const collection = serveIPC.modCollect.allModList?.[collectionKey]
 	if ( typeof collection?.mods !== 'object' ) { return null }
 	return Object.values(collection.mods).find((mod) => mod?.fileDetail?.shortName === modName) ?? null
 }
 
+// eslint-disable-next-line complexity
 async function downloadAndApplyUpdate(download) {
 	if (
 		typeof download?.collectionKey !== 'string' ||
@@ -2050,23 +2546,46 @@ async function downloadAndApplyUpdate(download) {
 	const targetPath = path.join(collectionFolder, path.basename(modRecord.fileDetail.fullPath))
 	const tempFolder = path.join(app.getPath('temp'), 'fsg-mod-assistant-update-downloads', safeDownloadFolderName(collectionName))
 	const tempPath = path.join(tempFolder, `${Date.now()}-${safeDownloadFileName(download.fileName)}`)
+	const sourceName = download.sourceType === 'modhub' ? 'ModHub' : 'GitHub'
 
 	try {
-		const cachedLibrary = findCachedModLibraryFile({
+		let cachedLibrary = findCachedModLibraryFile({
 			modName   : download.modName,
 			sourceURL : download.sourceURL ?? null,
 			version   : download.version,
 		})
-		const downloadLibrary = cachedLibrary === null ?
-			await downloadGitHubZipToPath(download, tempPath).then(() => registerModLibraryFile(tempPath, {
+		if ( cachedLibrary !== null ) {
+			try {
+				validateModZipIntegrity(cachedLibrary.filePath, {
+					expectedVersion : download.version,
+					label           : `${sourceName} cached ZIP`,
+				})
+			} catch {
+				cachedLibrary = null
+			}
+		}
+		let downloadLibrary = cachedLibrary
+		if ( downloadLibrary === null ) {
+			await downloadGitHubZipToPath(download, tempPath)
+			validateModZipIntegrity(tempPath, {
+				expectedVersion : download.version,
+				label           : `${sourceName} download`,
+			})
+			downloadLibrary = await registerModLibraryFile(tempPath, {
 				collectionName,
 				fileName  : download.fileName,
+				modHubID  : download.modHubID ?? null,
+				modHubVersion : download.sourceType === 'modhub' ? download.version : null,
 				modName   : download.modName,
-				source    : 'GitHub',
+				source    : sourceName,
 				sourceURL : download.sourceURL ?? null,
 				version   : download.version,
-			})) :
-			cachedLibrary
+			})
+		}
+		const sourceIntegrity = validateModZipIntegrity(downloadLibrary.libraryPath ?? downloadLibrary.filePath, {
+			expectedVersion : download.version,
+			label           : `${sourceName} update ZIP`,
+		})
 		const backupResult = await backupModToLibrary(targetPath, {
 			collectionName,
 			fileName  : path.basename(targetPath),
@@ -2076,6 +2595,10 @@ async function downloadAndApplyUpdate(download) {
 			version   : modRecord.modDesc.version,
 		})
 		await fsPromise.copyFile(downloadLibrary.libraryPath ?? downloadLibrary.filePath, targetPath)
+		const targetIntegrity = validateModZipIntegrity(targetPath, {
+			expectedVersion : sourceIntegrity.version,
+			label           : 'Updated collection ZIP',
+		})
 
 		return {
 			backupHash : backupResult.backupHash,
@@ -2083,6 +2606,7 @@ async function downloadAndApplyUpdate(download) {
 			collectionName,
 			currentHash : downloadLibrary.hash,
 			currentLibraryPath : downloadLibrary.libraryPath ?? downloadLibrary.filePath,
+			integrityVersion : targetIntegrity.version,
 			previousVersion : modRecord.modDesc.version,
 			targetPath,
 			tempPath,
@@ -2161,6 +2685,7 @@ async function rollbackLatestUpdate(update) {
 	if ( typeof rollbackEntry.targetPath !== 'string' ) { throw new Error(`Rollback target is missing for: ${update.modName}`) }
 	if ( !fs.existsSync(rollbackEntry.targetPath) ) { throw new Error(`Current mod ZIP not found: ${path.basename(rollbackEntry.targetPath)}`) }
 
+	const rollbackIntegrity = validateModZipIntegrity(rollbackEntry.backupPath, { label : 'Rollback backup ZIP' })
 	const currentBackup = await backupModToLibrary(rollbackEntry.targetPath, {
 		collectionName : rollbackEntry.collectionName,
 		fileName       : path.basename(rollbackEntry.targetPath),
@@ -2170,13 +2695,20 @@ async function rollbackLatestUpdate(update) {
 		version        : rollbackEntry.currentVersion ?? null,
 	})
 	await fsPromise.copyFile(rollbackEntry.backupPath, rollbackEntry.targetPath)
+	const targetIntegrity = validateModZipIntegrity(rollbackEntry.targetPath, {
+		expectedVersion : rollbackIntegrity.version,
+		label           : 'Restored collection ZIP',
+	})
 
 	return {
 		backupHash     : currentBackup.backupHash,
 		backupPath     : currentBackup.backupPath,
 		collectionName : rollbackEntry.collectionName,
+		currentVersion : targetIntegrity.version,
+		previousVersion : currentBackup.version ?? rollbackEntry.currentVersion ?? null,
 		rollbackHash   : rollbackEntry.backupHash ?? null,
 		rollbackPath   : rollbackEntry.backupPath,
+		rollbackVersion : rollbackIntegrity.version,
 		targetPath     : rollbackEntry.targetPath,
 	}
 }
@@ -2189,6 +2721,7 @@ async function rollbackHistoryEntry(entry) {
 		throw new Error('Current mod ZIP was not found')
 	}
 
+	const rollbackIntegrity = validateModZipIntegrity(entry.backupPath, { label : 'Rollback backup ZIP' })
 	const collectionName = entry.collectionName ?? 'updates'
 	const currentBackup = await backupModToLibrary(entry.targetPath, {
 		collectionName,
@@ -2199,15 +2732,22 @@ async function rollbackHistoryEntry(entry) {
 		version   : entry.currentVersion ?? null,
 	})
 	await fsPromise.copyFile(entry.backupPath, entry.targetPath)
+	const targetIntegrity = validateModZipIntegrity(entry.targetPath, {
+		expectedVersion : rollbackIntegrity.version,
+		label           : 'Restored collection ZIP',
+	})
 
 	return {
 		backupHash     : currentBackup.backupHash,
 		backupPath     : currentBackup.backupPath,
 		collectionName : collectionName,
+		currentVersion : targetIntegrity.version,
 		fileName       : entry.fileName ?? path.basename(entry.targetPath),
 		modName        : entry.modName ?? path.basename(entry.targetPath, '.zip'),
+		previousVersion : currentBackup.version ?? entry.currentVersion ?? null,
 		rollbackHash   : entry.backupHash ?? null,
 		rollbackPath   : entry.backupPath,
+		rollbackVersion : rollbackIntegrity.version,
 		sourceURL      : entry.sourceURL ?? null,
 		targetPath     : entry.targetPath,
 	}
@@ -2220,6 +2760,7 @@ function processModFoldersAndWait() {
 	})
 }
 
+// eslint-disable-next-line complexity
 function addCollectionHistoryEntry(entry) {
 	const historyEntries = serveIPC.storeHistory.get('entries', [])
 	const cleanEntry = {
@@ -2233,10 +2774,13 @@ function addCollectionHistoryEntry(entry) {
 		currentLibraryPath : entry.currentLibraryPath ?? null,
 		currentVersion   : entry.currentVersion ?? null,
 		fileName         : entry.fileName ?? null,
+		integrityChecked : entry.integrityChecked ?? false,
+		integrityVersion : entry.integrityVersion ?? null,
 		modName          : entry.modName ?? null,
 		previousVersion  : entry.previousVersion ?? null,
 		replacedExisting : entry.replacedExisting ?? false,
 		rollbackHash     : entry.rollbackHash ?? null,
+		rollbackVersion  : entry.rollbackVersion ?? null,
 		source           : entry.source ?? null,
 		sourceURL        : entry.sourceURL ?? null,
 		stagedPath       : entry.stagedPath ?? null,
@@ -2246,6 +2790,7 @@ function addCollectionHistoryEntry(entry) {
 
 	historyEntries.unshift(cleanEntry)
 	serveIPC.storeHistory.set('entries', historyEntries.slice(0, 1000))
+	invalidateModLibrarySummary()
 }
 
 function safeDownloadFileName(fileName) {
@@ -2400,17 +2945,30 @@ ipcMain.handle('input:restore', (_, s, v) => funcLib.inputManage.restore(s, v))
 // MARK: version resolve
 ipcMain.on('dispatch:version', () => { serveIPC.windowLib.createNamedWindow('version') })
 ipcMain.on('dispatch:update', () => { serveIPC.windowLib.createNamedWindow('update') })
-ipcMain.handle('update:list', () => serveIPC.modCollect.toRenderer({
-	activeCollection : serveIPC.gameSetOverride.index,
-	modSites         : serveIPC.storeSites.store,
-}))
+ipcMain.handle('update:list', async () => {
+	if ( serveIPC.isProcessing ) {
+		await new Promise((resolve) => { modQueueRunner.once('process-mods-done', resolve) })
+	}
+	return serveIPC.modCollect.toRenderer({
+		activeCollection : serveIPC.gameSetOverride.index,
+		modSites         : serveIPC.storeSites.store,
+	})
+})
 ipcMain.handle('history:all', () => serveIPC.storeHistory.get('entries', []))
 ipcMain.handle('history:clear', () => {
 	serveIPC.storeHistory.set('entries', [])
+	invalidateModLibrarySummary()
 	return { ok : true }
 })
 ipcMain.handle('vault:all', () => getModLibrarySummary())
 ipcMain.handle('vault:collections', () => getVaultCollections())
+ipcMain.handle('vault:copyPreview', async (_, payload) => {
+	try {
+		return await previewVaultCopyToCollection(payload)
+	} catch (err) {
+		return { ok : false, error : err.message }
+	}
+})
 ipcMain.handle('vault:copyToCollection', async (_, payload) => {
 	try {
 		return await copyVaultRecordToCollection(payload)
@@ -2428,6 +2986,13 @@ ipcMain.handle('vault:cleanupUnused', async (_, payload) => {
 ipcMain.handle('vault:setKeepPinned', (_, payload) => {
 	try {
 		return setModLibraryKeepPinned(payload)
+	} catch (err) {
+		return { ok : false, error : err.message }
+	}
+})
+ipcMain.handle('vault:setRetentionCount', (_, payload) => {
+	try {
+		return setModLibraryRetentionCount(payload)
 	} catch (err) {
 		return { ok : false, error : err.message }
 	}
@@ -2461,10 +3026,15 @@ ipcMain.handle('history:rollbackEntry', async (_, entry) => {
 			backupHash       : rollbackResult.backupHash,
 			backupPath       : rollbackResult.backupPath,
 			collectionName   : rollbackResult.collectionName,
+			currentVersion   : rollbackResult.currentVersion ?? null,
 			fileName         : rollbackResult.fileName,
+			integrityChecked : true,
+			integrityVersion : rollbackResult.currentVersion ?? null,
 			modName          : rollbackResult.modName,
+			previousVersion  : rollbackResult.previousVersion ?? null,
 			replacedExisting : rollbackResult.backupPath !== null,
 			rollbackHash     : rollbackResult.rollbackHash,
+			rollbackVersion  : rollbackResult.rollbackVersion ?? null,
 			source           : 'Rollback',
 			sourceURL        : rollbackResult.sourceURL,
 			stagedPath       : rollbackResult.rollbackPath,
@@ -2488,10 +3058,15 @@ ipcMain.handle('update:rollbackEntry', async (_, entry) => {
 			backupHash       : rollbackResult.backupHash,
 			backupPath       : rollbackResult.backupPath,
 			collectionName   : rollbackResult.collectionName,
+			currentVersion   : rollbackResult.currentVersion ?? null,
 			fileName         : rollbackResult.fileName,
+			integrityChecked : true,
+			integrityVersion : rollbackResult.currentVersion ?? null,
 			modName          : rollbackResult.modName,
+			previousVersion  : rollbackResult.previousVersion ?? null,
 			replacedExisting : rollbackResult.backupPath !== null,
 			rollbackHash     : rollbackResult.rollbackHash,
+			rollbackVersion  : rollbackResult.rollbackVersion ?? null,
 			source           : 'Rollback',
 			sourceURL        : rollbackResult.sourceURL,
 			stagedPath       : rollbackResult.rollbackPath,
@@ -2516,10 +3091,15 @@ ipcMain.handle('update:rollbackLatest', async (_, update) => {
 			backupHash       : rollbackResult.backupHash,
 			backupPath       : rollbackResult.backupPath,
 			collectionName   : rollbackResult.collectionName,
+			currentVersion   : rollbackResult.currentVersion ?? null,
 			fileName         : update.fileName ?? null,
+			integrityChecked : true,
+			integrityVersion : rollbackResult.currentVersion ?? null,
 			modName          : update.modName,
+			previousVersion  : rollbackResult.previousVersion ?? null,
 			replacedExisting : rollbackResult.backupPath !== null,
 			rollbackHash     : rollbackResult.rollbackHash,
+			rollbackVersion  : rollbackResult.rollbackVersion ?? null,
 			source           : 'Rollback',
 			sourceURL        : update.sourceURL ?? null,
 			stagedPath       : rollbackResult.rollbackPath,
@@ -2554,10 +3134,12 @@ ipcMain.handle('update:downloadApplySelected', async (_, downloads) => {
 				currentLibraryPath : updateResult.currentLibraryPath,
 				currentVersion   : download.version ?? null,
 				fileName         : download.fileName,
+				integrityChecked : true,
+				integrityVersion : updateResult.integrityVersion ?? download.version ?? null,
 				modName          : download.modName,
 				previousVersion  : updateResult.previousVersion ?? null,
 				replacedExisting : updateResult.backupPath !== null,
-				source           : updateResult.usedCache ? 'GitHub cache' : 'GitHub',
+				source           : updateResult.usedCache ? `${download.sourceType === 'modhub' ? 'ModHub' : 'GitHub'} cache` : (download.sourceType === 'modhub' ? 'ModHub' : 'GitHub'),
 				sourceURL        : download.sourceURL,
 				stagedPath       : null,
 				targetPath       : updateResult.targetPath,
@@ -2657,6 +3239,16 @@ function refreshClientModList(closeLoader = true) {
 	serveIPC.windowLib.sendToValidWindow('version', 'win:forceRefresh')
 }
 
+function refreshUpdateList() {
+	// The scan completion refresh sends the definitive list. Sending an early list here
+	// can briefly report no ModHub updates and starts duplicate remote checks.
+	if ( serveIPC.isProcessing ) { return }
+	serveIPC.windowLib.sendModList({
+		activeCollection : serveIPC.gameSetOverride.index,
+		modSites         : serveIPC.storeSites.store,
+	}, 'mods:list', 'update', false)
+}
+
 
 // MARK: FILE OPS
 ipcMain.handle('file:operation', async (_, operations) => funcLib.fileOperation.process(operations))
@@ -2678,6 +3270,7 @@ async function processModFolders(force = false) {
 
 // MARK: run scan (post)
 modQueueRunner.on('process-mods-done', () => {
+	invalidateModLibrarySummary()
 	funcLib.general.toggleFolderDirty(false)
 	funcLib.gameSet.read()
 	funcLib.gameSet.gameXML(25)

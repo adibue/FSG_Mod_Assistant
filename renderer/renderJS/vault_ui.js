@@ -10,11 +10,31 @@ let vaultEntries = []
 let vaultCollections = []
 let vaultCleanup = { count : 0, entries : [], totalSize : 0 }
 let vaultNotes = {}
+let vaultRetentionPolicy = { maximum : 10, versionCount : 3 }
 let vaultSourceFilter = ''
 let vaultSelectedHashes = new Set()
+let vaultGroupRows = new Map()
 
 function uniqueValues(values) {
 	return [...new Set(values.filter((value) => typeof value === 'string' && value !== ''))]
+}
+
+function friendlyStoreItemType(value) {
+	if ( typeof value !== 'string' ) { return '' }
+	const cleanValue = value.trim()
+	if ( cleanValue === '' || /^\$?l10n_/iu.test(cleanValue) ) { return '' }
+	const words = cleanValue
+		.replaceAll('_', ' ')
+		.replaceAll('-', ' ')
+		.replace(/([a-z0-9])([A-Z])/gu, '$1 $2')
+		.replace(/\s+/gu, ' ')
+		.trim()
+	if ( words === '' ) { return '' }
+	return words.charAt(0).toLocaleUpperCase() + words.slice(1)
+}
+
+function friendlyStoreItemTypes(values) {
+	return uniqueValues((values ?? []).map((value) => friendlyStoreItemType(value)))
 }
 
 function formatTimestamp(timestamp) {
@@ -65,7 +85,10 @@ function restoreVaultViewState(state = {}) {
 		if ( !openGroups.has(row.dataset.modName ?? '') ) { continue }
 		const body = row.querySelector('.vault-group-body')
 		const toggle = row.querySelector('.vault-group-toggle')
-		if ( body !== null ) { body.classList.add('show') }
+		if ( body !== null ) {
+			body.classList.add('show')
+			ensureVaultGroupRows(body)
+		}
 		if ( toggle !== null ) { toggle.setAttribute('aria-expanded', 'true') }
 	}
 	window.scrollTo(state.scrollX ?? window.scrollX, state.scrollY ?? window.scrollY)
@@ -152,6 +175,8 @@ function badgeTooltip(value, type) {
 				'Downloaded from GitHub'   : 'This ZIP came from a GitHub release or repository download.',
 				'Rollback action'          : 'This ZIP was involved in restoring an older mod version.',
 			}[value] ?? `Source: ${value}.`
+		case 'store-item-type' :
+			return `Store item type found in the mod shop metadata: ${value}.`
 		default :
 			return value
 	}
@@ -307,6 +332,76 @@ function storeItemPreviewHTML(previews, maxItems = 6) {
 	return `<div class="vault-store-preview mt-2">${imageHTML.join('')}</div>`
 }
 
+function cleanNumber(value) {
+	const numberValue = Number.parseFloat(value)
+	return Number.isFinite(numberValue) ? numberValue : null
+}
+
+function formatSpecNumber(value) {
+	const numberValue = cleanNumber(value)
+	if ( numberValue === null ) { return '' }
+	return Math.round(numberValue).toLocaleString()
+}
+
+function formatSpecRange(minValue, maxValue, suffix = '', prefix = '') {
+	const minNumber = cleanNumber(minValue)
+	const maxNumber = cleanNumber(maxValue)
+	if ( minNumber === null && maxNumber === null ) { return '' }
+	if ( minNumber !== null && maxNumber !== null && Math.round(minNumber) !== Math.round(maxNumber) ) {
+		return `${prefix}${formatSpecNumber(minNumber)}-${formatSpecNumber(maxNumber)}${suffix}`
+	}
+	return `${prefix}${formatSpecNumber(maxNumber ?? minNumber)}${suffix}`
+}
+
+function mergeEquipmentSpecsFromEntries(entries) {
+	const mergedSpecs = {}
+	for ( const entry of entries ) {
+		const specs = entry.equipmentSpecs ?? {}
+		for ( const field of ['priceMin', 'priceMax', 'horsepowerMin', 'horsepowerMax', 'speedLimitMax', 'fillLevelMax', 'weightMax'] ) {
+			const value = cleanNumber(specs[field])
+			if ( value === null ) { continue }
+			if ( field.endsWith('Min') ) {
+				mergedSpecs[field] = cleanNumber(mergedSpecs[field]) === null ? value : Math.min(mergedSpecs[field], value)
+			} else {
+				mergedSpecs[field] = cleanNumber(mergedSpecs[field]) === null ? value : Math.max(mergedSpecs[field], value)
+			}
+		}
+	}
+	return mergedSpecs
+}
+
+function equipmentSpecText(specs = {}) {
+	const parts = [
+		formatSpecRange(specs.priceMin, specs.priceMax, '', 'Price '),
+		formatSpecRange(specs.horsepowerMin, specs.horsepowerMax, ' hp', 'Power '),
+		formatSpecRange(null, specs.speedLimitMax, ' km/h', 'Speed '),
+		formatSpecRange(null, specs.fillLevelMax, ' L', 'Capacity '),
+		formatSpecRange(null, specs.weightMax, ' kg', 'Weight '),
+	].filter((part) => part !== '')
+	return parts.join(' | ')
+}
+
+function equipmentSpecHTML(specs = {}) {
+	const text = equipmentSpecText(specs)
+	if ( text === '' ) { return '' }
+	return `<div class="small mt-2 text-info">${DATA.escapeSpecial(text)}</div>`
+}
+
+function rangeMatches(specs, filterValue, minField, maxField) {
+	if ( filterValue === '' ) { return true }
+	const minValue = cleanNumber(specs[minField])
+	const maxValue = cleanNumber(specs[maxField])
+	if ( filterValue === 'missing' ) { return minValue === null && maxValue === null }
+	if ( minValue === null && maxValue === null ) { return false }
+	const [lowText, highText] = filterValue.split('-')
+	const filterMin = cleanNumber((lowText ?? '').replace('+', ''))
+	const filterMax = typeof highText === 'undefined' ? Number.POSITIVE_INFINITY : cleanNumber(highText)
+	if ( filterMin === null || filterMax === null ) { return true }
+	const valueMin = minValue ?? maxValue
+	const valueMax = maxValue ?? minValue
+	return valueMax >= filterMin && valueMin <= filterMax
+}
+
 function mergeStoreItemPreviews(entries, limit = 8) {
 	const previews = []
 	const seenImages = new Set()
@@ -387,11 +482,13 @@ function groupEntries(entries) {
 		const collections = uniqueValues(group.entries.flatMap((entry) => entry.collections ?? []))
 		const categories = uniqueValues(group.entries.flatMap((entry) => entry.itemCategories ?? []))
 		const brands = uniqueValues(group.entries.flatMap((entry) => entry.itemBrands ?? []))
+		const equipmentSpecs = mergeEquipmentSpecsFromEntries(group.entries)
 		const modHubCategories = uniqueValues(group.entries.flatMap((entry) => entry.modHubCategories ?? []))
 		const modTypes = uniqueValues(group.entries.flatMap((entry) => entry.modTypes ?? []))
 		const sources = uniqueValues(group.entries.flatMap((entry) => entry.sources ?? []).map((source) => friendlySourceName(source)))
 		const sourceTypes = sourceTypesForEntries(group.entries)
 		const storeItemPreviews = mergeStoreItemPreviews(sortedEntries)
+		const storeItemTypes = friendlyStoreItemTypes(group.entries.flatMap((entry) => entry.storeItemTypes ?? []))
 		const note = vaultNotes[vaultNoteKey(group.modName)]?.note ?? ''
 		const hasNote = note.trim() !== ''
 		const hasRollback = group.entries.some((entry) => entry.isUsed === true || (entry.sources ?? []).some((source) => source === 'Rollback' || source === 'Rollback current'))
@@ -403,9 +500,11 @@ function groupEntries(entries) {
 			collections.join(' '),
 			categories.join(' '),
 			brands.join(' '),
+			equipmentSpecText(equipmentSpecs),
 			modHubCategories.join(' '),
 			modTypes.join(' '),
 			sources.join(' '),
+			storeItemTypes.join(' '),
 			group.entries.map((entry) => entry.fileName).join(' '),
 			group.entries.map((entry) => entry.sourceURL).join(' '),
 			group.entries.map((entry) => `${entry.modHubLatestVersion ?? ''} ${entry.modHubStatus ?? ''}`).join(' '),
@@ -418,6 +517,7 @@ function groupEntries(entries) {
 			categories,
 			collections,
 			entries : sortedEntries,
+			equipmentSpecs,
 			hasNote,
 			hasRollback,
 			hasUpdate,
@@ -429,6 +529,7 @@ function groupEntries(entries) {
 			sources,
 			sourceTypes,
 			storeItemPreviews,
+			storeItemTypes,
 			totalSize : group.entries.reduce((sum, entry) => sum + (entry.size ?? 0), 0),
 			versions,
 		}
@@ -443,6 +544,10 @@ function filterEntries() {
 	const collectionFilter = MA.byId('vaultCollectionFilter').value
 	const noteFilter = MA.byId('vaultNoteFilter').value
 	const rollbackFilter = MA.byId('vaultRollbackFilter').value
+	const brandFilter = MA.byId('vaultBrandFilter').value
+	const horsepowerFilter = MA.byId('vaultHorsepowerFilter').value
+	const priceFilter = MA.byId('vaultPriceFilter').value
+	const storeItemTypeFilter = MA.byId('vaultStoreItemTypeFilter').value
 	const updateFilter = MA.byId('vaultUpdateFilter').value
 	const groups = groupEntries(vaultEntries)
 	// Each independent Vault filter contributes one simple predicate branch.
@@ -451,6 +556,10 @@ function filterEntries() {
 		(textFilter === '' || group.searchText.includes(textFilter)) &&
 		(typeFilter === '' || group.modTypes.includes(typeFilter)) &&
 		(categoryFilter === '' || group.categories.includes(categoryFilter)) &&
+		(brandFilter === '' || group.brands.includes(brandFilter)) &&
+		(storeItemTypeFilter === '' || group.storeItemTypes.includes(storeItemTypeFilter)) &&
+		rangeMatches(group.equipmentSpecs, horsepowerFilter, 'horsepowerMin', 'horsepowerMax') &&
+		rangeMatches(group.equipmentSpecs, priceFilter, 'priceMin', 'priceMax') &&
 		(modHubCategoryFilter === '' || group.modHubCategories.includes(modHubCategoryFilter)) &&
 		(collectionFilter === '' || group.collections.includes(collectionFilter)) &&
 		(vaultSourceFilter === '' || group.sourceTypes.includes(vaultSourceFilter)) &&
@@ -489,6 +598,7 @@ async function renderFileRows(entries, groupIndex) {
 			collectionBadges : makeBadges(entry.collections ?? [], 'text-bg-secondary', 'collection'),
 			deleteButton     : canDelete ? '<button class="btn btn-sm btn-outline-danger vault-delete-request" title="Permanently delete this cleanable ZIP from the Vault." type="button">Delete ZIP</button>' : '',
 			deleteConfirmation : canDelete ? '<div class="alert alert-danger d-none mt-2 mb-0 vault-delete-confirmation"><div class="small mb-2">Permanently delete this ZIP from the Vault? This action is logged and cannot be undone.</div><div class="d-flex flex-wrap gap-2"><button class="btn btn-sm btn-danger vault-delete-confirm" type="button">Delete permanently</button><button class="btn btn-sm btn-outline-secondary vault-delete-cancel" type="button">Cancel</button></div></div>' : '',
+			equipmentSpecLine : equipmentSpecHTML(entry.equipmentSpecs ?? {}),
 			fileName         : DATA.escapeSpecial(entry.fileName ?? ''),
 			filePath         : DATA.escapeSpecial(entry.filePath ?? ''),
 			gameVersions     : DATA.escapeSpecial((entry.gameVersions ?? []).join(', ') || 'unknown'),
@@ -506,6 +616,7 @@ async function renderFileRows(entries, groupIndex) {
 			size             : DATA.escapeSpecial(size),
 			sourceBadges     : makeBadges(uniqueValues(entry.sources ?? []).map((source) => friendlySourceName(source)), 'text-bg-warning', 'source'),
 			storeItemPreviews : storeItemPreviewHTML(entry.storeItemPreviews ?? [], 8),
+			storeItemTypeBadges : makeBadges(friendlyStoreItemTypes(entry.storeItemTypes ?? []), 'text-bg-info', 'store-item-type'),
 			typeBadges       : makeBadges(entry.modTypes ?? [], 'text-bg-primary', 'type'),
 			updatedAt        : DATA.escapeSpecial(formatTimestamp(entry.updatedAt)),
 			usedBadge        : entry.isUsed ?
@@ -543,6 +654,22 @@ async function renderFileRows(entries, groupIndex) {
 	return rows.join('')
 }
 
+async function ensureVaultGroupRows(body) {
+	if ( body.dataset.loaded === 'true' || body.dataset.loading === 'true' ) { return }
+	const groupData = vaultGroupRows.get(body.id)
+	if ( typeof groupData === 'undefined' ) { return }
+
+	body.dataset.loading = 'true'
+	body.innerHTML = '<div class="text-body-secondary p-3">Loading stored ZIP details...</div>'
+	const rows = await renderFileRows(groupData.entries, groupData.groupIndex)
+	if ( !body.isConnected ) { return }
+	body.innerHTML = rows
+	body.dataset.loaded = 'true'
+	delete body.dataset.loading
+	enableTooltips(body)
+	updateVaultSelectionControls()
+}
+
 function fillSelect(selectID, values, firstLabel) {
 	const select = MA.byId(selectID)
 	const currentValue = select.value
@@ -560,9 +687,11 @@ function fillSelect(selectID, values, firstLabel) {
 
 function refreshFilterOptions() {
 	fillSelect('vaultTypeFilter', uniqueValues(vaultEntries.flatMap((entry) => entry.modTypes ?? [])), 'All mod types')
+	fillSelect('vaultBrandFilter', uniqueValues(vaultEntries.flatMap((entry) => entry.itemBrands ?? [])), 'All manufacturers/brands')
 	fillSelect('vaultCategoryFilter', uniqueValues(vaultEntries.flatMap((entry) => entry.itemCategories ?? [])), 'All internal categories')
 	fillSelect('vaultModHubCategoryFilter', uniqueValues(vaultEntries.flatMap((entry) => entry.modHubCategories ?? [])), 'All ModHub categories')
 	fillSelect('vaultCollectionFilter', uniqueValues(vaultEntries.flatMap((entry) => entry.collections ?? [])), 'All collections')
+	fillSelect('vaultStoreItemTypeFilter', friendlyStoreItemTypes(vaultEntries.flatMap((entry) => entry.storeItemTypes ?? [])), 'All store-item types')
 }
 
 async function renderCleanupPanel() {
@@ -626,18 +755,46 @@ async function updateVaultSummary(summary) {
 	vaultEntries = summary.entries
 	vaultCleanup = summary.cleanup ?? { count : 0, entries : [], totalSize : 0 }
 	vaultNotes = summary.notes ?? vaultNotes
+	vaultRetentionPolicy = summary.retentionPolicy ?? vaultRetentionPolicy
 	MA.byIdText('vaultCount', summary.totalCount.toString())
 	MA.byIdText('vaultUsedCount', summary.usedCount.toString())
 	MA.byIdText('vaultSize', await DATA.bytesToHR(summary.totalSize))
 	MA.byIdText('vaultFolder', summary.folder)
+	MA.byId('vaultRetentionCount').value = vaultRetentionPolicy.versionCount.toString()
 	await renderCleanupPanel()
 	refreshBulkCopyTarget()
 	pruneVaultSelection()
 }
 
+async function updateVaultRetentionCount(event) {
+	const select = event.currentTarget
+	const count = Number.parseInt(select.value, 10)
+	const viewState = captureVaultViewState()
+	select.disabled = true
+	try {
+		const result = await window.vault_IPC.setRetentionCount({ count })
+		if ( !result.ok ) {
+			MA.byIdText('vaultStatus', `Retention policy update failed: ${result.error ?? 'Unknown error'}`)
+			select.value = vaultRetentionPolicy.versionCount.toString()
+			return
+		}
+		await updateVaultSummary(result.summary)
+		refreshFilterOptions()
+		await renderVault(filterEntries())
+		restoreVaultViewState(viewState)
+		MA.byIdText('vaultStatus', `Retention policy updated: keeping the newest ${count} version${count === 1 ? '' : 's'} of each mod.`)
+	} catch (err) {
+		MA.byIdText('vaultStatus', `Retention policy update failed: ${err.message}`)
+		select.value = vaultRetentionPolicy.versionCount.toString()
+	} finally {
+		select.disabled = false
+	}
+}
+
 async function renderVault(groups) {
 	const list = MA.byId('vaultList')
 	list.innerHTML = ''
+	vaultGroupRows = new Map()
 
 	if ( groups.length === 0 ) {
 		MA.byIdText('vaultStatus', vaultEntries.length === 0 ? 'No mod vault entries found.' : 'No matching vault entries found.')
@@ -658,7 +815,7 @@ async function renderVault(groups) {
 			`${group.versions.length} version label${group.versions.length === 1 ? '' : 's'} recorded`
 		const node = DATA.templateEngine('vault_line', {
 			fileCount      : DATA.escapeSpecial(`${group.entries.length} stored ZIP file${group.entries.length === 1 ? '' : 's'}`),
-			fileRows       : await renderFileRows(group.entries, groupIndex),
+			fileRows       : '',
 			modIcon        : modIconHTML(group.modIcon),
 			modName        : DATA.escapeSpecial(group.modName),
 			storeItemPreviews : storeItemPreviewHTML(group.storeItemPreviews, 6),
@@ -669,6 +826,7 @@ async function renderVault(groups) {
 		node.querySelector('.vault-group-toggle').setAttribute('data-bs-toggle', 'collapse')
 		node.querySelector('.vault-group-toggle').setAttribute('data-bs-target', `#${groupBodyId}`)
 		node.querySelector('.vault-group-body').id = groupBodyId
+		vaultGroupRows.set(groupBodyId, { entries : group.entries, groupIndex })
 		nodeRoot.dataset.collections = JSON.stringify(group.collections)
 		nodeRoot.dataset.fileName = group.entries[0]?.fileName ?? ''
 		nodeRoot.dataset.hash = group.entries[0]?.hash ?? ''
@@ -766,10 +924,18 @@ async function saveVaultNote(button, shouldClear = false) {
 	const modName = button.dataset.modName ?? ''
 	if ( group === null || input === null || modName === '' ) { return }
 
-	if ( shouldClear && input.value.trim() !== '' && !confirm(`Clear the note for ${modName}?`) ) { return }
+	if ( shouldClear && input.value.trim() !== '' && button.dataset.confirmClear !== 'true' ) {
+		button.dataset.confirmClear = 'true'
+		button.textContent = 'Confirm clear'
+		group.querySelector('.vault-note-status').textContent = 'Click Confirm clear to permanently remove this note.'
+		input.focus({ preventScroll : true })
+		return
+	}
 
 	const note = shouldClear ? '' : input.value
-	const originalText = button.textContent
+	const buttonText = shouldClear ? 'Clear note' : 'Save note'
+	let noteCleared = false
+	delete button.dataset.confirmClear
 	setButtonState(button, true, shouldClear ? 'Clearing...' : 'Saving...')
 
 	try {
@@ -786,11 +952,15 @@ async function saveVaultNote(button, shouldClear = false) {
 		}
 
 		const savedNote = result.record?.note ?? ''
+		noteCleared = savedNote === ''
 		const preview = group.querySelector('.vault-note-preview')
 		const badge = group.querySelector('.vault-note-badge')
 		const toggle = group.querySelector('.vault-note-toggle')
 		const clearButton = group.querySelector('.vault-note-clear')
-		input.value = savedNote
+		const liveInput = group.querySelector('.vault-note-input')
+		delete clearButton.dataset.confirmClear
+		clearButton.textContent = 'Clear note'
+		liveInput.value = savedNote
 		preview.textContent = savedNote
 		preview.classList.toggle('d-none', savedNote === '')
 		badge.classList.toggle('d-none', savedNote === '')
@@ -804,10 +974,65 @@ async function saveVaultNote(button, shouldClear = false) {
 	} catch (err) {
 		group.querySelector('.vault-note-status').textContent = `Note could not be saved: ${err.message}`
 	} finally {
-		setButtonState(button, shouldClear && input.value.trim() === '', originalText)
+		setButtonState(button, shouldClear && noteCleared, buttonText)
+		requestAnimationFrame(() => {
+			window.focus()
+			if ( input.isConnected ) {
+				input.focus({ preventScroll : true })
+			} else {
+				focusVaultSearch()
+			}
+		})
 	}
 }
 
+function copyPreviewWarningLines(preview, limit = 8) {
+	const lines = []
+	for ( const item of preview.items ?? [] ) {
+		const label = item.fileName ?? item.modName ?? 'Vault ZIP'
+		for ( const warning of item.warnings ?? [] ) {
+			lines.push(`${label}: ${warning}`)
+		}
+		for ( const dependency of item.dependencies ?? [] ) {
+			lines.push(`${label}: depends on ${dependency}`)
+		}
+		if ( typeof item.conflictNote === 'string' && item.conflictNote !== '' ) {
+			lines.push(`${label}: note mentions ${item.conflictNote.toLowerCase()}`)
+		}
+	}
+	if ( lines.length <= limit ) { return lines }
+	return [
+		...lines.slice(0, limit),
+		`...and ${lines.length - limit} more warning${lines.length - limit === 1 ? '' : 's'}.`,
+	]
+}
+
+function copyPreviewStatusText(preview) {
+	if ( preview.ok === false ) { return `Copy preview failed: ${preview.error ?? 'Unknown error'}` }
+	const warnings = copyPreviewWarningLines(preview, 3)
+	if ( warnings.length === 0 ) { return `Ready to copy to ${preview.collectionName ?? 'the selected collection'}.` }
+	return `Review before copying: ${warnings.join(' | ')}`
+}
+
+async function confirmVaultCopyPreview(collectionKey, hashes) {
+	const preview = await window.vault_IPC.copyPreview({ collectionKey, hashes })
+	if ( preview.ok === false ) { return { confirmed : false, preview } }
+
+	const warnings = copyPreviewWarningLines(preview)
+	if ( warnings.length === 0 ) { return { confirmed : true, preview } }
+
+	const confirmed = MA.confirm([
+		`Before copying to ${preview.collectionName ?? 'the selected collection'}:`,
+		'',
+		...warnings,
+		'',
+		'Continue with the copy?',
+	].join('\n'))
+
+	return { confirmed, preview }
+}
+
+// eslint-disable-next-line complexity
 async function copyVaultEntry(button) {
 	const row = button.closest('.vault-file-row')
 	const select = row?.querySelector('.vault-copy-target')
@@ -821,15 +1046,31 @@ async function copyVaultEntry(button) {
 	}
 
 	const originalText = button.textContent
-	setButtonState(button, true, 'Copying...')
-	if ( rowStatus !== null ) { rowStatus.textContent = 'Copying ZIP to the selected collection...' }
+	setButtonState(button, true, 'Checking...')
+	if ( rowStatus !== null ) { rowStatus.textContent = 'Checking this copy first...' }
 	const hash = button.dataset.hash
 
 	try {
-		let result = await window.vault_IPC.copyToCollection({ collectionKey, hash, overwrite : false })
+		const { confirmed, preview } = await confirmVaultCopyPreview(collectionKey, [hash])
+		const previewText = copyPreviewStatusText(preview)
+		if ( rowStatus !== null ) { rowStatus.textContent = previewText }
+		if ( preview.ok === false ) {
+			MA.byIdText('vaultStatus', previewText)
+			return
+		}
+		if ( !confirmed ) {
+			const message = 'Copy cancelled. Nothing was changed.'
+			MA.byIdText('vaultStatus', message)
+			if ( rowStatus !== null ) { rowStatus.textContent = message }
+			return
+		}
+
+		setButtonState(button, true, 'Copying...')
+		const shouldOverwrite = (preview.items ?? []).some((item) => item.hash === hash && item.targetExists === true)
+		let result = await window.vault_IPC.copyToCollection({ collectionKey, hash, overwrite : shouldOverwrite })
 		if ( result.needsOverwrite ) {
-			const confirmed = confirm(`${result.fileName} already exists in ${result.collectionName}. Replace it and save a backup first?`)
-			if ( !confirmed ) {
+			const overwriteConfirmed = MA.confirm(`${result.fileName} already exists in ${result.collectionName}. Replace it and save a backup first?`)
+			if ( !overwriteConfirmed ) {
 				const message = 'Copy cancelled. Nothing was changed.'
 				MA.byIdText('vaultStatus', message)
 				if ( rowStatus !== null ) { rowStatus.textContent = message }
@@ -862,10 +1103,10 @@ async function copyVaultEntry(button) {
 	}
 }
 
-async function copyVaultHashToCollection(hash, collectionKey) {
-	let result = await window.vault_IPC.copyToCollection({ collectionKey, hash, overwrite : false })
-	if ( result.needsOverwrite ) {
-		const confirmed = confirm(`${result.fileName} already exists in ${result.collectionName}. Replace it and save a backup first?`)
+async function copyVaultHashToCollection(hash, collectionKey, overwrite = false) {
+	let result = await window.vault_IPC.copyToCollection({ collectionKey, hash, overwrite })
+	if ( result.needsOverwrite && !overwrite ) {
+		const confirmed = MA.confirm(`${result.fileName} already exists in ${result.collectionName}. Replace it and save a backup first?`)
 		if ( !confirmed ) { return { cancelled : true, result } }
 		result = await window.vault_IPC.copyToCollection({ collectionKey, hash, overwrite : true })
 	}
@@ -888,8 +1129,17 @@ async function setVaultKeepPinned(button) {
 			MA.byIdText('vaultStatus', `Vault keep action failed: ${result.error ?? 'Unknown error'}`)
 			return
 		}
-		const entryName = result.entry?.fileName ?? 'Vault ZIP'
-		await loadVaultPreservingView()
+		const viewState = captureVaultViewState()
+		const entryIndex = vaultEntries.findIndex((entry) => entry.hash === hash)
+		if ( entryIndex !== -1 && result.entry !== null ) {
+			vaultEntries[entryIndex] = result.entry
+		}
+		vaultCleanup = result.cleanup ?? vaultCleanup
+		await renderCleanupPanel()
+		refreshFilterOptions()
+		await renderVault(filterEntries())
+		restoreVaultViewState(viewState)
+		const entryName = result.entry?.fileName ?? vaultEntries[entryIndex]?.fileName ?? 'Vault ZIP'
 		MA.byIdText('vaultStatus', keepPinned ? `${entryName} is now kept and protected from cleanup.` : `${entryName} is no longer manually kept.`)
 	} catch (err) {
 		MA.byIdText('vaultStatus', `Vault keep action failed: ${err.message}`)
@@ -946,6 +1196,7 @@ async function deleteVaultEntry(button) {
 	}
 }
 
+// eslint-disable-next-line complexity
 async function copySelectedVaultEntries() {
 	const button = MA.byId('vaultBulkCopyButton')
 	const select = MA.byId('vaultBulkCopyTarget')
@@ -964,18 +1215,36 @@ async function copySelectedVaultEntries() {
 	}
 
 	const originalText = button.textContent
-	setButtonState(button, true, 'Copying selected...')
+	setButtonState(button, true, 'Checking selected...')
 	status.classList.remove('text-success', 'text-danger')
-	status.textContent = `Copying ${hashes.length} selected Vault ZIP${hashes.length === 1 ? '' : 's'}...`
+	status.textContent = `Checking ${hashes.length} selected Vault ZIP${hashes.length === 1 ? '' : 's'} before copying...`
 	let copied = 0
 	let replaced = 0
 	let skipped = 0
 	const errors = []
 
 	try {
+		const { confirmed, preview } = await confirmVaultCopyPreview(collectionKey, hashes)
+		const previewText = copyPreviewStatusText(preview)
+		status.textContent = previewText
+		if ( preview.ok === false ) {
+			status.classList.add('text-danger')
+			MA.byIdText('vaultStatus', previewText)
+			return
+		}
+		if ( !confirmed ) {
+			const message = 'Bulk copy cancelled. Nothing was changed.'
+			MA.byIdText('vaultStatus', message)
+			status.textContent = message
+			return
+		}
+
+		setButtonState(button, true, 'Copying selected...')
+		status.textContent = `Copying ${hashes.length} selected Vault ZIP${hashes.length === 1 ? '' : 's'}...`
+		const overwriteHashes = new Set((preview.items ?? []).filter((item) => item.targetExists === true).map((item) => item.hash))
 		for ( const hash of hashes ) {
-			// eslint-disable-next-line no-await-in-loop -- Copies may need one-at-a-time overwrite confirmations.
-			const { cancelled, result } = await copyVaultHashToCollection(hash, collectionKey)
+			// eslint-disable-next-line no-await-in-loop -- Copies are kept one-at-a-time so each file operation can safely finish before the next starts.
+			const { cancelled, result } = await copyVaultHashToCollection(hash, collectionKey, overwriteHashes.has(hash))
 			if ( cancelled ) {
 				skipped++
 				continue
@@ -1009,14 +1278,16 @@ async function copySelectedVaultEntries() {
 }
 
 function setShownVaultSelection(shouldSelect) {
-	for ( const checkbox of MA.byId('vaultList').querySelectorAll('.vault-copy-check') ) {
-		const hash = checkbox.value
-		checkbox.checked = shouldSelect
+	const shownHashes = filterEntries().flatMap((group) => group.entries.map((entry) => entry.hash)).filter((hash) => typeof hash === 'string' && hash !== '')
+	for ( const hash of shownHashes ) {
 		if ( shouldSelect ) {
 			vaultSelectedHashes.add(hash)
 		} else {
 			vaultSelectedHashes.delete(hash)
 		}
+	}
+	for ( const checkbox of MA.byId('vaultList').querySelectorAll('.vault-copy-check') ) {
+		checkbox.checked = vaultSelectedHashes.has(checkbox.value)
 	}
 	updateVaultSelectionControls()
 }
@@ -1078,7 +1349,7 @@ async function deleteSelectedUnusedVaultFiles() {
 	}
 	const selectedSize = selectedEntries.reduce((sum, entry) => sum + (entry.size ?? 0), 0)
 	const selectedSizeText = await DATA.bytesToHR(selectedSize)
-	const confirmed = confirm(`Delete ${selectedHashes.length} unused Vault ZIP${selectedHashes.length === 1 ? '' : 's'} and recover ${selectedSizeText}?\n\nRollback/history ZIPs are protected and will not be deleted.`)
+	const confirmed = MA.confirm(`Delete ${selectedHashes.length} unused Vault ZIP${selectedHashes.length === 1 ? '' : 's'} and recover ${selectedSizeText}?\n\nRollback/history ZIPs are protected and will not be deleted.`)
 	if ( !confirmed ) {
 		MA.byIdText('vaultStatus', 'Vault cleanup cancelled. Nothing was deleted.')
 		return
@@ -1113,6 +1384,9 @@ async function deleteSelectedUnusedVaultFiles() {
 window.addEventListener('DOMContentLoaded', () => {
 	window.vault_IPC.receive('vault:contextResult', handleVaultContextResult)
 	MA.byId('vaultList').addEventListener('contextmenu', openVaultDetail)
+	MA.byId('vaultList').addEventListener('show.bs.collapse', (event) => {
+		if ( event.target.classList.contains('vault-group-body') ) { ensureVaultGroupRows(event.target) }
+	})
 	MA.byId('vaultList').addEventListener('click', (event) => {
 		const copyButton = event.target.closest('.vault-copy-button')
 		if ( copyButton !== null ) { copyVaultEntry(copyButton) }
@@ -1144,11 +1418,15 @@ window.addEventListener('DOMContentLoaded', () => {
 	})
 	MA.byId('vaultTextFilter').addEventListener('input', () => { renderVault(filterEntries()) })
 	MA.byId('vaultTypeFilter').addEventListener('change', () => { renderVault(filterEntries()) })
+	MA.byId('vaultBrandFilter').addEventListener('change', () => { renderVault(filterEntries()) })
 	MA.byId('vaultCategoryFilter').addEventListener('change', () => { renderVault(filterEntries()) })
 	MA.byId('vaultModHubCategoryFilter').addEventListener('change', () => { renderVault(filterEntries()) })
 	MA.byId('vaultCollectionFilter').addEventListener('change', () => { renderVault(filterEntries()) })
 	MA.byId('vaultNoteFilter').addEventListener('change', () => { renderVault(filterEntries()) })
 	MA.byId('vaultRollbackFilter').addEventListener('change', () => { renderVault(filterEntries()) })
+	MA.byId('vaultHorsepowerFilter').addEventListener('change', () => { renderVault(filterEntries()) })
+	MA.byId('vaultPriceFilter').addEventListener('change', () => { renderVault(filterEntries()) })
+	MA.byId('vaultStoreItemTypeFilter').addEventListener('change', () => { renderVault(filterEntries()) })
 	MA.byId('vaultUpdateFilter').addEventListener('change', () => { renderVault(filterEntries()) })
 	MA.byId('vaultSourceFilter').addEventListener('click', (event) => {
 		const sourceButton = event.target.closest('button[data-source]')
@@ -1157,11 +1435,15 @@ window.addEventListener('DOMContentLoaded', () => {
 	MA.byId('vaultClearFilters').addEventListener('click', () => {
 		MA.byId('vaultTextFilter').value = ''
 		MA.byId('vaultTypeFilter').value = ''
+		MA.byId('vaultBrandFilter').value = ''
 		MA.byId('vaultCategoryFilter').value = ''
 		MA.byId('vaultModHubCategoryFilter').value = ''
 		MA.byId('vaultCollectionFilter').value = ''
 		MA.byId('vaultNoteFilter').value = ''
 		MA.byId('vaultRollbackFilter').value = ''
+		MA.byId('vaultHorsepowerFilter').value = ''
+		MA.byId('vaultPriceFilter').value = ''
+		MA.byId('vaultStoreItemTypeFilter').value = ''
 		MA.byId('vaultUpdateFilter').value = ''
 		setSourceFilter('')
 	})
@@ -1174,6 +1456,7 @@ window.addEventListener('DOMContentLoaded', () => {
 		if ( event.target.closest('.vault-cleanup-check') !== null ) { updateCleanupSelectionPreview() }
 	})
 	MA.byId('vaultDeleteUnused').addEventListener('click', deleteSelectedUnusedVaultFiles)
+	MA.byId('vaultRetentionCount').addEventListener('change', updateVaultRetentionCount)
 	MA.byId('vaultBulkCopyTarget').addEventListener('change', updateVaultSelectionControls)
 	MA.byId('vaultBulkCopyButton').addEventListener('click', copySelectedVaultEntries)
 	MA.byId('vaultSelectShown').addEventListener('click', () => { setShownVaultSelection(true) })
