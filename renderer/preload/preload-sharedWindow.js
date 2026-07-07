@@ -272,13 +272,18 @@ const pageAPI = {
 	},
 	'update' : {
 		functions : {
+			collectionManifestCollections : () => ipcRenderer.invoke('manifest:collections'),
 			dispatchHistory  : () => ipcRenderer.send('dispatch:history'),
 			dispatchVault    : () => ipcRenderer.send('dispatch:vault'),
 			downloadApplySelected : (downloads) => ipcRenderer.invoke('update:downloadApplySelected', downloads),
+			exportCollectionManifest : (payload) => ipcRenderer.invoke('manifest:export', payload),
 			get              : ()    => ipcRenderer.invoke('update:list'),
 			getGitHub        : (url, force = false) => ipcRenderer.invoke('settings:site:githubLatest', url, force),
 			getModHub        : (modHubID, force = false) => ipcRenderer.invoke('settings:site:modHubLatest', modHubID, force),
 			hasRollbackBackup : (update) => ipcRenderer.invoke('update:hasRollbackBackup', update),
+			importCollectionManifestClipboard : () => ipcRenderer.invoke('manifest:importClipboard'),
+			importCollectionManifestFile : () => ipcRenderer.invoke('manifest:importFile'),
+			installCollectionManifest : (payload) => ipcRenderer.invoke('manifest:install', payload),
 			openURL          : (url) => ipcRenderer.send('win:openURL', url),
 			rollbackEntries  : (update) => ipcRenderer.invoke('update:rollbackEntries', update),
 			rollbackEntry    : (entry) => ipcRenderer.invoke('update:rollbackEntry', entry),

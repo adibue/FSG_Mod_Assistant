@@ -21,6 +21,7 @@ const crypto           = require('node:crypto')
 const path             = require('node:path')
 const fs               = require('node:fs')
 const fsPromise        = require('node:fs/promises')
+const zlib             = require('node:zlib')
 const Store            = require('electron-store')
 
 serveIPC.log = new (require('./lib/modUtilLib')).ma_logger('modAssist', app, 'assist.log', gotTheLock)
@@ -2617,6 +2618,132 @@ async function downloadAndApplyUpdate(download) {
 	}
 }
 
+// eslint-disable-next-line complexity
+async function installManifestMod(collectionKey, download) {
+	if ( typeof collectionKey !== 'string' || typeof download?.modName !== 'string' || typeof download?.remoteVersion !== 'string' ) {
+		throw new Error('Invalid shared-collection download.')
+	}
+	const collection = (await getVaultCollections()).find((entry) => entry.key === collectionKey)
+	if ( typeof collection === 'undefined' ) { throw new Error('The destination collection is no longer available.') }
+
+	const existingMod = getCollectionModRecord(collectionKey, download.modName)
+	if ( existingMod !== null && compareModVersions(existingMod.modDesc.version, download.remoteVersion) >= 0 ) {
+		return { modName : download.modName, skipped : true, version : existingMod.modDesc.version }
+	}
+
+	const sourceName = download.sourceType === 'modhub' ? 'ModHub' : 'GitHub'
+	const assetName = safeDownloadFileName(download.assetName ?? `${download.modName}.zip`)
+	const tempFolder = path.join(app.getPath('temp'), 'fsg-mod-assistant-manifest-downloads', safeDownloadFolderName(collection.name))
+	const tempPath = path.join(tempFolder, `${Date.now()}-${assetName}`)
+	let cachedLibrary = findCachedModLibraryFile({
+		modName   : download.modName,
+		sourceURL : download.sourceURL ?? null,
+		version   : download.remoteVersion,
+	})
+
+	try {
+		if ( cachedLibrary !== null ) {
+			try {
+				validateModZipIntegrity(cachedLibrary.filePath, { expectedVersion : download.remoteVersion, label : 'Cached shared-collection ZIP' })
+			} catch {
+				cachedLibrary = null
+			}
+		}
+
+		let libraryRecord = cachedLibrary
+		if ( libraryRecord === null ) {
+			if ( typeof download.downloadURL !== 'string' || download.downloadURL === '' ) {
+				throw new Error(`${download.modName} requires a manual download.`)
+			}
+			await downloadGitHubZipToPath({ fileName : assetName, url : download.downloadURL }, tempPath)
+			const integrity = validateModZipIntegrity(tempPath, { expectedVersion : download.remoteVersion, label : `${sourceName} shared-collection ZIP` })
+			libraryRecord = await registerModLibraryFile(tempPath, {
+				collectionName : collection.name,
+				fileName       : assetName,
+				modHubID       : download.modHubID ?? null,
+				modHubVersion  : download.sourceType === 'modhub' ? download.remoteVersion : null,
+				modName        : integrity.modName,
+				source         : sourceName,
+				sourceURL      : download.sourceURL ?? null,
+				version        : integrity.version,
+			})
+		}
+
+		const sourcePath = libraryRecord.libraryPath ?? libraryRecord.filePath
+		const sourceIntegrity = validateModZipIntegrity(sourcePath, { expectedVersion : download.remoteVersion, label : 'Shared-collection Vault ZIP' })
+		const targetPath = path.join(collection.path, assetName)
+		const previousPath = existingMod?.fileDetail?.fullPath ?? (fs.existsSync(targetPath) ? targetPath : null)
+		let backupResult = { backupHash : null, backupPath : null }
+		let previousVersion = null
+
+		if ( previousPath !== null && fs.existsSync(previousPath) ) {
+			const previousIntegrity = validateModZipIntegrity(previousPath, { label : 'Existing collection ZIP' })
+			previousVersion = previousIntegrity.version
+			backupResult = await backupModToLibrary(previousPath, {
+				collectionName : collection.name,
+				fileName       : path.basename(previousPath),
+				modName        : download.modName,
+				source         : 'Collection',
+				sourceURL      : download.sourceURL ?? null,
+				version        : previousVersion,
+			})
+		}
+
+		await fsPromise.mkdir(collection.path, { recursive : true })
+		await fsPromise.copyFile(sourcePath, targetPath)
+		if ( previousPath !== null && path.resolve(previousPath) !== path.resolve(targetPath) ) {
+			await fsPromise.rm(previousPath, { force : true })
+		}
+		const targetIntegrity = validateModZipIntegrity(targetPath, { expectedVersion : sourceIntegrity.version, label : 'Imported collection ZIP' })
+
+		addCollectionHistoryEntry({
+			action             : 'manifest_installed',
+			backupHash         : backupResult.backupHash,
+			backupPath         : backupResult.backupPath,
+			collectionName     : collection.name,
+			currentHash        : libraryRecord.hash,
+			currentLibraryPath : sourcePath,
+			currentVersion     : targetIntegrity.version,
+			fileName           : assetName,
+			integrityChecked   : true,
+			integrityVersion   : targetIntegrity.version,
+			modName            : targetIntegrity.modName,
+			previousVersion,
+			replacedExisting   : previousPath !== null,
+			source             : cachedLibrary === null ? sourceName : `${sourceName} cache`,
+			sourceURL          : download.sourceURL ?? null,
+			targetPath,
+		})
+
+		return { modName : targetIntegrity.modName, ok : true, skipped : false, version : targetIntegrity.version }
+	} finally {
+		await fsPromise.rm(tempPath, { force : true }).catch(() => {})
+	}
+}
+
+async function installCollectionManifestMods(collectionKey, downloads) {
+	if ( !Array.isArray(downloads) || downloads.length === 0 ) { throw new Error('No downloadable manifest mods were selected.') }
+	const results = []
+	for ( const download of downloads ) {
+		// Install sequentially so two renamed mods cannot overwrite the same destination at once.
+		try {
+			// eslint-disable-next-line no-await-in-loop
+			results.push(await installManifestMod(collectionKey, download))
+		} catch (err) {
+			results.push({ error : err.message, modName : download?.modName ?? 'Unknown mod', ok : false, skipped : false })
+		}
+	}
+	funcLib.general.toggleFolderDirty()
+	await processModFoldersAndWait()
+	return {
+		failed    : results.filter((result) => result.ok === false).length,
+		installed : results.filter((result) => result.ok !== false && !result.skipped).length,
+		ok        : true,
+		results,
+		skipped   : results.filter((result) => result.ok !== false && result.skipped).length,
+	}
+}
+
 function hasRollbackBackup(update) {
 	return getLatestRollbackEntry(update) !== null
 }
@@ -2845,6 +2972,223 @@ function getGitHubRepoInfo(sourceURL) {
 	}
 }
 
+const COLLECTION_MANIFEST_SCHEMA = 'fsg-mod-assistant.collection'
+const COLLECTION_MANIFEST_VERSION = 1
+const COLLECTION_SHARE_PREFIX = 'fsgma://collection/v1/'
+
+function collectionManifestSources(modRecord) {
+	const sources = []
+	const modName = modRecord.fileDetail.shortName
+	const sourceURL = serveIPC.storeSites.get(modName, null)
+	const modHub = serveIPC.modCollect.modHubFullRecord(modRecord)
+
+	if ( modHub.id !== null ) {
+		sources.push({ id : modHub.id, type : 'modhub', url : funcLib.general.doModHub(modHub.id) })
+	}
+	if ( typeof sourceURL === 'string' && sourceURL !== '' ) {
+		const sourceType = getGitHubRepoInfo(sourceURL) === null ? 'manual' : 'github'
+		if ( !sources.some((source) => source.url === sourceURL) ) {
+			sources.push({ type : sourceType, url : sourceURL })
+		}
+	}
+	return sources
+}
+
+function createCollectionManifest(collectionKey) {
+	if ( typeof collectionKey !== 'string' || !serveIPC.modCollect.collections.has(collectionKey) ) {
+		throw new Error('Choose a monitored collection to export.')
+	}
+
+	const collection = serveIPC.modCollect.getModCollection(collectionKey)
+	const collectionName = serveIPC.modCollect.mapCollectionToName(collectionKey) ?? collectionKey
+	const mods = Object.values(collection?.mods ?? {})
+		.filter((modRecord) => modRecord?.fileDetail?.isFolder !== true && modRecord?.fileDetail?.isMod !== false)
+		.map((modRecord) => ({
+			fileName : path.basename(modRecord.fileDetail.fullPath),
+			name     : modRecord.fileDetail.shortName,
+			sources  : collectionManifestSources(modRecord),
+			version  : modRecord.modDesc.version ?? null,
+		}))
+		.toSorted((left, right) => left.name.localeCompare(right.name))
+
+	return {
+		collection : { name : collectionName },
+		exportedAt : new Date().toISOString(),
+		gameVersion : serveIPC.storeNote.get(`${collectionKey}.notes_version`, serveIPC.storeSet.get('game_version')),
+		mods,
+		schema  : COLLECTION_MANIFEST_SCHEMA,
+		version : COLLECTION_MANIFEST_VERSION,
+	}
+}
+
+function validateCollectionManifest(manifest) {
+	if ( manifest?.schema !== COLLECTION_MANIFEST_SCHEMA || manifest?.version !== COLLECTION_MANIFEST_VERSION ) {
+		throw new Error('This is not a supported FSG Mod Assistant collection manifest.')
+	}
+	if ( !Array.isArray(manifest.mods) ) { throw new Error('The collection manifest has no readable mod list.') }
+	if ( manifest.mods.length > 5000 ) { throw new Error('The collection manifest contains too many entries.') }
+
+	const mods = manifest.mods.map((mod) => {
+		if ( typeof mod?.name !== 'string' || mod.name === '' ) { throw new Error('The manifest contains an unnamed mod.') }
+		return {
+			fileName : safeDownloadFileName(mod.fileName ?? `${mod.name}.zip`),
+			name     : mod.name,
+			sources  : Array.isArray(mod.sources) ? mod.sources.filter((source) => ['github', 'manual', 'modhub'].includes(source?.type)) : [],
+			version  : typeof mod.version === 'string' ? mod.version : null,
+		}
+	})
+
+	return {
+		collection : { name : typeof manifest.collection?.name === 'string' ? manifest.collection.name : 'Shared collection' },
+		exportedAt : manifest.exportedAt ?? null,
+		gameVersion : manifest.gameVersion ?? null,
+		mods,
+		schema  : COLLECTION_MANIFEST_SCHEMA,
+		version : COLLECTION_MANIFEST_VERSION,
+	}
+}
+
+function collectionManifestShareCode(manifest) {
+	const compressed = zlib.gzipSync(Buffer.from(JSON.stringify(manifest)), { level : 9 })
+	return `${COLLECTION_SHARE_PREFIX}${compressed.toString('base64url')}`
+}
+
+function parseCollectionManifestText(rawText) {
+	if ( typeof rawText !== 'string' || rawText.trim() === '' ) { throw new Error('No collection manifest was supplied.') }
+	const cleanText = rawText.trim()
+	if ( cleanText.startsWith(COLLECTION_SHARE_PREFIX) ) {
+		const encoded = cleanText.slice(COLLECTION_SHARE_PREFIX.length)
+		try {
+			return validateCollectionManifest(JSON.parse(zlib.gunzipSync(Buffer.from(encoded, 'base64url')).toString('utf8')))
+		} catch {
+			throw new Error('The copied collection link is damaged or incomplete.')
+		}
+	}
+	try {
+		return validateCollectionManifest(JSON.parse(cleanText))
+	} catch (err) {
+		if ( err.message.includes('FSG Mod Assistant') || err.message.includes('manifest') ) { throw err }
+		throw new Error('The selected file is not a readable collection manifest.')
+	}
+}
+
+function manifestLocalVersions(modName) {
+	const versions = new Set()
+	for ( const collectionKey of serveIPC.modCollect.collections ) {
+		for ( const modRecord of Object.values(serveIPC.modCollect.getModCollection(collectionKey)?.mods ?? {}) ) {
+			if ( modRecord?.fileDetail?.shortName === modName && typeof modRecord?.modDesc?.version === 'string' ) {
+				versions.add(modRecord.modDesc.version)
+			}
+		}
+	}
+	return [...versions]
+}
+
+function newestResolvedManifestSource(results) {
+	return results.toSorted((left, right) => {
+		const compared = compareModVersions(left.version, right.version)
+		if ( !Number.isNaN(compared) && compared !== 0 ) { return compared }
+		if ( left.hasDownload !== right.hasDownload ) { return left.hasDownload ? 1 : -1 }
+		return 0
+	}).at(-1) ?? null
+}
+
+async function resolveManifestMod(mod) {
+	const automaticSources = mod.sources.filter((source) => source.type === 'github' || source.type === 'modhub')
+	const manualSource = mod.sources.find((source) => source.type === 'manual') ?? null
+	const sourceResults = (await Promise.all(automaticSources.map(async (source) => {
+		let result
+		if ( source.type === 'github' && typeof source.url === 'string' ) {
+			result = await cachedRemoteUpdate(`github:${source.url}`, false, () => getGitHubLatestUpdate(source.url))
+		} else if ( source.type === 'modhub' && Number.isFinite(Number(source.id)) ) {
+			result = await cachedRemoteUpdate(`modhub:${source.id}`, false, () => getModHubLatestUpdate(source.id, false))
+		}
+		if ( result?.ok ) {
+			return {
+				...result,
+				modHubID : source.type === 'modhub' ? Number(source.id) : null,
+				sourceType : source.type,
+				sourceURL  : result.url ?? source.url ?? null,
+			}
+		}
+		return null
+	}))).filter((result) => result !== null)
+
+	const bestSource = newestResolvedManifestSource(sourceResults)
+	if ( bestSource !== null ) {
+		return {
+			assetName : bestSource.assetName ?? mod.fileName,
+			downloadURL : bestSource.downloadURL ?? null,
+			localVersions : manifestLocalVersions(mod.name),
+			modHubID  : bestSource.modHubID,
+			modName   : mod.name,
+			remoteVersion : bestSource.version,
+			requestedVersion : mod.version,
+			sourceType : bestSource.sourceType,
+			sourceURL  : bestSource.sourceURL,
+			state      : bestSource.hasDownload ? 'downloadable' : 'manual',
+		}
+	}
+
+	const fallbackSource = manualSource ?? automaticSources[0] ?? null
+	return {
+		assetName : mod.fileName,
+		downloadURL : null,
+		localVersions : manifestLocalVersions(mod.name),
+		modHubID  : null,
+		modName   : mod.name,
+		remoteVersion : null,
+		requestedVersion : mod.version,
+		sourceType : fallbackSource?.type ?? 'unknown',
+		sourceURL  : fallbackSource?.url ?? null,
+		state      : fallbackSource === null ? 'missing' : 'manual',
+	}
+}
+
+async function resolveCollectionManifest(manifest) {
+	const resolvedMods = new Array(manifest.mods.length)
+	let nextIndex = 0
+	const worker = async () => {
+		const index = nextIndex++
+		if ( index >= manifest.mods.length ) { return }
+		resolvedMods[index] = await resolveManifestMod(manifest.mods[index])
+		return worker()
+	}
+	await Promise.all(Array.from({ length : Math.min(6, manifest.mods.length) }, () => worker()))
+	return { manifest, mods : resolvedMods, ok : true }
+}
+
+async function importCollectionManifestFromFile() {
+	const result = await dialog.showOpenDialog(serveIPC.windowLib.win.update, {
+		filters : [{ name : 'FSG Collection Manifest', extensions : ['json', 'fsgcollection'] }],
+		properties : ['openFile'],
+	})
+	if ( result.canceled || result.filePaths.length === 0 ) { return { canceled : true, ok : false } }
+	return resolveCollectionManifest(parseCollectionManifestText(await fsPromise.readFile(result.filePaths[0], 'utf8')))
+}
+
+async function exportCollectionManifest(collectionKey, mode) {
+	const manifest = createCollectionManifest(collectionKey)
+	if ( mode === 'clipboard' ) {
+		const shareCode = collectionManifestShareCode(manifest)
+		clipboard.writeText(shareCode)
+		return { count : manifest.mods.length, length : shareCode.length, mode, ok : true }
+	}
+
+	const suggestedName = `${safeDownloadFolderName(manifest.collection.name)}.fsgcollection.json`
+	const result = await dialog.showSaveDialog(serveIPC.windowLib.win.update, {
+		defaultPath : suggestedName,
+		filters : [{ name : 'FSG Collection Manifest', extensions : ['json'] }],
+	})
+	if ( result.canceled || typeof result.filePath !== 'string' ) { return { canceled : true, ok : false } }
+	await fsPromise.writeFile(result.filePath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8')
+	return { count : manifest.mods.length, filePath : result.filePath, mode : 'file', ok : true }
+}
+
+async function importCollectionManifestFromClipboard() {
+	return resolveCollectionManifest(parseCollectionManifestText(clipboard.readText()))
+}
+
 // MARK: download
 ipcMain.on('file:downloadCancel', () => { if ( serveIPC.dlRequest !== null ) { serveIPC.dlRequest.abort() } })
 ipcMain.on('file:download',   (_, CKey) => { funcLib.general.importZIP(CKey) })
@@ -2953,6 +3297,35 @@ ipcMain.handle('update:list', async () => {
 		activeCollection : serveIPC.gameSetOverride.index,
 		modSites         : serveIPC.storeSites.store,
 	})
+})
+ipcMain.handle('manifest:collections', () => getVaultCollections())
+ipcMain.handle('manifest:export', async (_, payload) => {
+	try {
+		return await exportCollectionManifest(payload?.collectionKey, payload?.mode)
+	} catch (err) {
+		return { ok : false, error : err.message }
+	}
+})
+ipcMain.handle('manifest:importFile', async () => {
+	try {
+		return await importCollectionManifestFromFile()
+	} catch (err) {
+		return { ok : false, error : err.message }
+	}
+})
+ipcMain.handle('manifest:importClipboard', async () => {
+	try {
+		return await importCollectionManifestFromClipboard()
+	} catch (err) {
+		return { ok : false, error : err.message }
+	}
+})
+ipcMain.handle('manifest:install', async (_, payload) => {
+	try {
+		return await installCollectionManifestMods(payload?.collectionKey, payload?.downloads)
+	} catch (err) {
+		return { ok : false, error : err.message }
+	}
 })
 ipcMain.handle('history:all', () => serveIPC.storeHistory.get('entries', []))
 ipcMain.handle('history:clear', () => {

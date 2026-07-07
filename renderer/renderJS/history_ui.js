@@ -9,6 +9,7 @@
 let historyEntries = []
 
 const fallbackLabels = {
+	history_action_manifest_installed : 'Shared collection mod installed',
 	history_action_update_applied     : 'Update applied',
 	history_action_update_rolled_back : 'Update rolled back',
 	history_action_update_staged      : 'Update staged',
@@ -50,6 +51,7 @@ function actionLabelText(action) {
 	if ( action === 'update_applied' ) { return plainLabel('history_action_update_applied') }
 	if ( action === 'update_rolled_back' ) { return plainLabel('history_action_update_rolled_back') }
 	if ( action === 'update_staged' ) { return plainLabel('history_action_update_staged') }
+	if ( action === 'manifest_installed' ) { return plainLabel('history_action_manifest_installed') }
 	if ( action === 'vault_cleanup_deleted' ) { return plainLabel('history_action_vault_cleanup_deleted') }
 	if ( action === 'vault_copied' ) { return plainLabel('history_action_vault_copied') }
 	return action ?? ''
@@ -165,6 +167,10 @@ function historyTimeline(entry) {
 	}
 	if ( entry?.action === 'vault_copied' && currentVersion !== null ) {
 		return `Copied version ${currentVersion} from the Vault into this collection.`
+	}
+	if ( entry?.action === 'manifest_installed' && currentVersion !== null ) {
+		const previousText = previousVersion === null ? '' : `, replacing ${previousVersion}`
+		return `Installed shared collection mod ${modName} version ${currentVersion}${previousText}.`
 	}
 	if ( entry?.integrityChecked ) {
 		const versionText = typeof entry?.integrityVersion === 'string' && entry.integrityVersion !== '' ? ` Version ${entry.integrityVersion}.` : ''

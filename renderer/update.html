@@ -72,7 +72,42 @@
 			<button class="btn btn-outline-info w-100 mt-2" type="button" id="refreshUpdatesButton">
 				Refresh update checks
 			</button>
+			<button class="btn btn-outline-light w-100 mt-2" type="button" id="manifestToggleButton">
+				Share or import a collection
+			</button>
 		</div>
+
+		<section class="mx-2 mb-3 card d-none" id="manifestPanel">
+			<div class="card-body">
+				<h2 class="h5">Shareable collection manifest</h2>
+				<p class="small text-body-secondary">The manifest contains mod names and trusted source references, not the mod ZIP files.</p>
+				<label class="form-label" for="manifestCollection">Collection</label>
+				<select class="form-select mb-3" id="manifestCollection"></select>
+				<div class="row g-2 mb-3">
+					<div class="col-md-3"><button class="btn btn-outline-primary w-100" type="button" id="manifestExportFile">Export file</button></div>
+					<div class="col-md-3"><button class="btn btn-outline-primary w-100" type="button" id="manifestCopyLink">Copy share link</button></div>
+					<div class="col-md-3"><button class="btn btn-outline-success w-100" type="button" id="manifestImportFile">Import file</button></div>
+					<div class="col-md-3"><button class="btn btn-outline-success w-100" type="button" id="manifestImportLink">Import copied link</button></div>
+				</div>
+				<div class="alert alert-secondary py-2" id="manifestStatus">Choose an export or import action.</div>
+				<div class="d-none" id="manifestPreview">
+					<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+						<div class="fw-bold" id="manifestTitle"></div>
+						<div class="btn-group me-auto">
+							<button class="btn btn-sm btn-secondary active" type="button" id="manifestShowAll">Show all</button>
+							<button class="btn btn-sm btn-outline-danger" type="button" id="manifestShowAttention">Show manual or missing</button>
+						</div>
+						<div class="btn-group">
+							<button class="btn btn-sm btn-outline-success" type="button" id="manifestSelectAll">Select downloadable</button>
+							<button class="btn btn-sm btn-outline-secondary" type="button" id="manifestSelectNone">Select none</button>
+						</div>
+					</div>
+					<div class="small mb-2" id="manifestSummary"></div>
+					<button class="btn btn-warning w-100 mb-3" type="button" id="manifestInstall" disabled>Install selected mods into the chosen collection</button>
+					<div class="list-group" id="manifestList"></div>
+				</div>
+			</div>
+		</section>
 
 		<div class="mx-2 mb-3 alert alert-secondary" id="updateStatus">
 			<i18n-text data-key="update_list_checking"></i18n-text>
@@ -121,6 +156,21 @@
 			</div>
 		</div>
 	</li>
+</template>
+
+<template id="manifest_line">
+	<div class="list-group-item d-flex align-items-start gap-3 manifest-row">
+		<input class="form-check-input manifest-select mt-1" type="checkbox" aria-label="Select shared mod">
+		<div class="flex-grow-1">
+			<div class="d-flex flex-wrap justify-content-between gap-2">
+				<div class="fw-bold"><template-var>modName</template-var></div>
+				<div><template-var>stateBadge</template-var></div>
+			</div>
+			<div class="small text-body-secondary"><template-var>versions</template-var></div>
+			<div class="small"><template-var>detail</template-var></div>
+			<button class="btn btn-sm btn-outline-primary mt-2 manifest-source-button d-none" type="button">Open source page</button>
+		</div>
+	</div>
 </template>
 
 </body>
