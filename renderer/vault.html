@@ -129,9 +129,43 @@
 						</select>
 					</div>
 					<div class="col-md-4">
+						<label class="form-label small" for="vaultBrandFilter">Manufacturer / brand</label>
+						<select class="form-select form-select-sm" id="vaultBrandFilter">
+							<option value="">All manufacturers/brands</option>
+						</select>
+					</div>
+					<div class="col-md-4">
+						<label class="form-label small" for="vaultStoreItemTypeFilter">Store-item type</label>
+						<select class="form-select form-select-sm" id="vaultStoreItemTypeFilter">
+							<option value="">All store-item types</option>
+						</select>
+					</div>
+					<div class="col-md-4">
+						<label class="form-label small" for="vaultHorsepowerFilter">Horsepower</label>
+						<select class="form-select form-select-sm" id="vaultHorsepowerFilter">
+							<option value="">Any horsepower</option>
+							<option value="0-99">Under 100 hp</option>
+							<option value="100-199">100 - 199 hp</option>
+							<option value="200-299">200 - 299 hp</option>
+							<option value="300-400">300 - 400 hp</option>
+							<option value="401+">401+ hp</option>
+						</select>
+					</div>
+					<div class="col-md-4">
 						<label class="form-label small" for="vaultCollectionFilter">Collection</label>
 						<select class="form-select form-select-sm" id="vaultCollectionFilter">
 							<option value="">All collections</option>
+						</select>
+					</div>
+					<div class="col-md-4">
+						<label class="form-label small" for="vaultPriceFilter">Price</label>
+						<select class="form-select form-select-sm" id="vaultPriceFilter">
+							<option value="">Any price</option>
+							<option value="0-9999">Under 10,000</option>
+							<option value="10000-49999">10,000 - 49,999</option>
+							<option value="50000-99999">50,000 - 99,999</option>
+							<option value="100000-250000">100,000 - 250,000</option>
+							<option value="250001+">250,001+</option>
 						</select>
 					</div>
 					<div class="col-md-4">
@@ -172,7 +206,7 @@
 					</div>
 					<div class="col-12">
 						<label class="form-label small" for="vaultTextFilter">Search</label>
-						<input class="form-control form-control-sm" id="vaultTextFilter" placeholder="Search mod name, version, category, source, collection, or notes" type="search">
+						<input class="form-control form-control-sm" id="vaultTextFilter" placeholder="Search mod name, version, category, brand, specs, source, collection, or notes" type="search">
 					</div>
 					<div class="col-12 small text-body-secondary">
 						Vault folder: <span class="vault-path user-select-text" id="vaultFolder"></span>
@@ -191,13 +225,28 @@
 						<div class="small text-info" id="vaultCleanupPreviewSummary">Cleanup preview is based on Vault retention rules.</div>
 					</div>
 					<div class="d-flex flex-wrap gap-2">
+						<div class="input-group input-group-sm" style="width: 16rem;">
+							<label class="input-group-text" for="vaultRetentionCount">Keep newest</label>
+							<select class="form-select" id="vaultRetentionCount" title="Keep this many newest ZIP versions of every mod, in addition to all specially protected versions.">
+								<option value="1">1 version</option>
+								<option value="2">2 versions</option>
+								<option selected value="3">3 versions</option>
+								<option value="4">4 versions</option>
+								<option value="5">5 versions</option>
+								<option value="6">6 versions</option>
+								<option value="7">7 versions</option>
+								<option value="8">8 versions</option>
+								<option value="9">9 versions</option>
+								<option value="10">10 versions</option>
+							</select>
+						</div>
 						<button class="btn btn-sm btn-outline-info" id="vaultShowCleanup" type="button">Review unused ZIPs</button>
 						<button class="btn btn-sm btn-danger" disabled id="vaultDeleteUnused" type="button">Delete selected unused ZIPs</button>
 					</div>
 				</div>
 				<div class="collapse mt-3" id="vaultCleanupPanel">
 					<div class="alert alert-warning py-2">
-						Preview only: these are the ZIPs that Vault retention rules currently allow cleanup to remove. Kept, rollback, and history-referenced ZIPs are protected.
+						Preview only: these are older ZIPs that the retention rules currently allow cleanup to remove. Current collection copies, newest retained versions, kept ZIPs, rollback copies, and history-referenced ZIPs are protected.
 					</div>
 					<div class="vault-cleanup-list list-group" id="vaultCleanupList"></div>
 					<div class="d-flex flex-wrap justify-content-between gap-2 align-items-center mt-2 small">
@@ -310,11 +359,13 @@
 			<template-var>modHubStatusBadge</template-var>
 			<template-var>modHubCategoryBadges</template-var>
 			<template-var>categoryBadges</template-var>
+			<template-var>storeItemTypeBadges</template-var>
 			<template-var>brandBadges</template-var>
 			<template-var>sourceBadges</template-var>
 			<template-var>collectionBadges</template-var>
 		</div>
 		<template-var>storeItemPreviews</template-var>
+		<div class="small mt-2 text-body-secondary"><template-var>equipmentSpecLine</template-var></div>
 		<div class="small mt-2"><template-var>modHubStatusLine</template-var></div>
 		<div class="small mt-2 text-body-secondary"><template-var>retentionReason</template-var></div>
 		<div class="small mt-2 text-body-secondary"><template-var>updatedAt</template-var></div>

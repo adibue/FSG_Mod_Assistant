@@ -9,6 +9,7 @@
 let historyEntries = []
 
 const fallbackLabels = {
+	history_action_manifest_installed : 'Shared collection mod installed',
 	history_action_update_applied     : 'Update applied',
 	history_action_update_rolled_back : 'Update rolled back',
 	history_action_update_staged      : 'Update staged',
@@ -17,6 +18,7 @@ const fallbackLabels = {
 	history_backup_saved              : 'Backup saved',
 	history_filter_all_actions        : 'All actions',
 	history_filter_all_collections    : 'All collections',
+	history_integrity_checked         : 'ZIP checked',
 	history_rollback_button           : 'Rollback to this version',
 	history_rollback_failed           : 'Rollback failed:',
 	history_rollback_restored         : 'Rollback restored.',
@@ -49,6 +51,7 @@ function actionLabelText(action) {
 	if ( action === 'update_applied' ) { return plainLabel('history_action_update_applied') }
 	if ( action === 'update_rolled_back' ) { return plainLabel('history_action_update_rolled_back') }
 	if ( action === 'update_staged' ) { return plainLabel('history_action_update_staged') }
+	if ( action === 'manifest_installed' ) { return plainLabel('history_action_manifest_installed') }
 	if ( action === 'vault_cleanup_deleted' ) { return plainLabel('history_action_vault_cleanup_deleted') }
 	if ( action === 'vault_copied' ) { return plainLabel('history_action_vault_copied') }
 	return action ?? ''
@@ -148,6 +151,34 @@ function versionBadges(entry) {
 	return `<span class="badge text-bg-info">Version ${DATA.escapeSpecial(currentVersion ?? previousVersion)}</span>`
 }
 
+// eslint-disable-next-line complexity
+function historyTimeline(entry) {
+	const previousVersion = typeof entry?.previousVersion === 'string' && entry.previousVersion !== '' ? entry.previousVersion : null
+	const currentVersion = typeof entry?.currentVersion === 'string' && entry.currentVersion !== '' ? entry.currentVersion : null
+	const rollbackVersion = typeof entry?.rollbackVersion === 'string' && entry.rollbackVersion !== '' ? entry.rollbackVersion : currentVersion
+	const modName = entry?.modName ?? 'mod'
+
+	if ( entry?.action === 'update_applied' && previousVersion !== null && currentVersion !== null ) {
+		return `Updated ${modName} from ${previousVersion} to ${currentVersion}. Previous copy saved for rollback.`
+	}
+	if ( entry?.action === 'update_rolled_back' && rollbackVersion !== null ) {
+		const fromText = previousVersion !== null ? ` from ${previousVersion}` : ''
+		return `Restored ${modName}${fromText} to ${rollbackVersion}. The replaced copy was saved as a new rollback point.`
+	}
+	if ( entry?.action === 'vault_copied' && currentVersion !== null ) {
+		return `Copied version ${currentVersion} from the Vault into this collection.`
+	}
+	if ( entry?.action === 'manifest_installed' && currentVersion !== null ) {
+		const previousText = previousVersion === null ? '' : `, replacing ${previousVersion}`
+		return `Installed shared collection mod ${modName} version ${currentVersion}${previousText}.`
+	}
+	if ( entry?.integrityChecked ) {
+		const versionText = typeof entry?.integrityVersion === 'string' && entry.integrityVersion !== '' ? ` Version ${entry.integrityVersion}.` : ''
+		return `ZIP integrity was checked before this action completed.${versionText}`
+	}
+	return ''
+}
+
 async function reloadHistory() {
 	historyEntries = await window.history_IPC.all()
 	setupFilters(historyEntries)
@@ -186,9 +217,16 @@ function renderHistory(entries, totalEntries) {
 		const backupBadge = entry.backupPath ?
 			`<span class="badge text-bg-success">${I18N.defer('history_backup_saved', false)}</span>` :
 			''
+		const integrityBadge = entry.integrityChecked ?
+			`<span class="badge text-bg-primary">${DATA.escapeSpecial(plainLabel('history_integrity_checked'))}</span>` :
+			''
 		const backupPath = entry.backupPath ?
 			`<div class="small mt-1 history-path user-select-text">${DATA.escapeSpecial(entry.backupPath)}</div>` :
 			''
+		const timeline = historyTimeline(entry)
+		const timelineHTML = timeline === '' ?
+			'' :
+			`<div class="small mt-2">${DATA.escapeSpecial(timeline)}</div>`
 		const targetPath = entry.targetPath ?
 			`<div class="small mt-1 history-path user-select-text">${DATA.escapeSpecial(entry.targetPath)}</div>` :
 			''
@@ -201,6 +239,7 @@ function renderHistory(entries, totalEntries) {
 			backupPath     : backupPath,
 			collectionName : DATA.escapeSpecial(entry.collectionName ?? ''),
 			fileName       : DATA.escapeSpecial(entry.fileName ?? ''),
+			integrityBadge : integrityBadge,
 			modName        : DATA.escapeSpecial(entry.modName ?? ''),
 			replaceBadge   : replaceBadge,
 			rollbackButton : rollbackButton,
@@ -208,6 +247,7 @@ function renderHistory(entries, totalEntries) {
 			sourceURL      : DATA.escapeSpecial(entry.sourceURL ?? ''),
 			stagedPath     : DATA.escapeSpecial(entry.stagedPath ?? ''),
 			targetPath     : targetPath,
+			timeline       : timelineHTML,
 			timestamp      : DATA.escapeSpecial(formatTimestamp(entry.timestamp)),
 			versionBadges  : versionBadges(entry),
 		})
@@ -228,7 +268,7 @@ window.addEventListener('DOMContentLoaded', () => {
 		renderFilteredHistory()
 	})
 	MA.byId('historyClearLog').addEventListener('click', async () => {
-		if ( !confirm('Clear the collection history log? This will not delete mod backups or mod files.') ) { return }
+		if ( !MA.confirm('Clear the collection history log? This will not delete mod backups or mod files.') ) { return }
 		const result = await window.history_IPC.clear()
 		if ( result.ok ) {
 			await reloadHistory()

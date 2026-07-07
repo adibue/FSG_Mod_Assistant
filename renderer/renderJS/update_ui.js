@@ -58,13 +58,14 @@ function makeCandidateMap(modCollect) {
 
 			if ( thisMod.fileDetail.isFolder ) { continue }
 
-			const addCandidate = (sourceType, sourceLink, remoteVersion = null) => {
+			const addCandidate = (sourceType, sourceLink, remoteVersion = null, modHubID = null) => {
 				const candidateKey = `${modName}::${sourceType}`
 				candidates[candidateKey] ??= {
 					collectionKeys : [],
 					collections : [],
 					icon        : thisMod.modDesc.iconImage,
 					local       : new Set(),
+					modHubID,
 					modName,
 					remoteVersion,
 					sourceLabel : sourceType === 'github' ? 'GitHub' : 'ModHub',
@@ -81,7 +82,7 @@ function makeCandidateMap(modCollect) {
 
 			if ( isGitHubURL(sourceURL) ) { addCandidate('github', sourceURL) }
 			if ( thisMod.modHub.id !== null && typeof thisMod.modHub.version === 'string' && thisMod.modHub.version !== '' ) {
-				addCandidate('modhub', `https://www.farming-simulator.com/mod.php?mod_id=${thisMod.modHub.id}`, thisMod.modHub.version)
+				addCandidate('modhub', `https://www.farming-simulator.com/mod.php?mod_id=${thisMod.modHub.id}`, thisMod.modHub.version, thisMod.modHub.id)
 			}
 		}
 	}
@@ -110,7 +111,7 @@ function statusText(result) {
 }
 
 function downloadStatusText(result) {
-	if ( result.source === 'modhub' ) {
+	if ( result.source === 'modhub' && !result.hasDownload ) {
 		return '<span class="badge text-bg-secondary">Manual download from ModHub</span>'
 	}
 	if ( result.hasDownload ) {
@@ -136,21 +137,28 @@ function withTimeout(promise, timeoutMS = 15000) {
 	])
 }
 
-function modListTimeout(timeoutMS = 15000) {
-	return new Promise((resolve) => {
-		setTimeout(() => {
-			resolve(null)
-		}, timeoutMS)
-	})
+async function mapWithConcurrency(entries, limit, mapper) {
+	const results = new Array(entries.length)
+	let nextIndex = 0
+	const worker = async () => {
+		const currentIndex = nextIndex++
+		if ( currentIndex >= entries.length ) { return }
+		results[currentIndex] = await mapper(entries[currentIndex])
+		return worker()
+	}
+	await Promise.all(Array.from({ length : Math.min(limit, entries.length) }, () => worker()))
+	return results
 }
 
 let activeRenderID = 0
+let activeCollectionKey = null
+let manifestResolvedMods = []
 
 function collectionContextText(modCollect) {
 	const activeCollect   = modCollect.opts?.activeCollection ?? null
 	const collectionName  = activeCollect === null ? null : modCollect.collectionToName?.[activeCollect]
-	const collectionLabel = collectionName ?? I18N.defer('history_filter_all_collections', false)
-	return `${I18N.defer('update_list_collection_context', false)} ${DATA.escapeSpecial(collectionLabel)}`
+	const collectionLabel = collectionName ?? 'All monitored collections'
+	return `Checking updates for: ${DATA.escapeSpecial(collectionLabel)}`
 }
 
 function renderEmpty(messageKey) {
@@ -198,7 +206,9 @@ function getSelectedDownloadCandidates() {
 			collectionKey : checkbox.dataset.collectionKey,
 			collectionName : checkbox.dataset.collectionName,
 			fileName : checkbox.dataset.assetName,
+			modHubID : checkbox.dataset.modHubId,
 			modName  : checkbox.dataset.modName,
+			sourceType : checkbox.dataset.sourceType,
 			sourceURL : checkbox.dataset.sourceUrl,
 			url      : checkbox.dataset.downloadUrl,
 			version  : checkbox.dataset.remoteVersion,
@@ -222,7 +232,7 @@ async function downloadSelectedZIPs() {
 	updateSelectedCount()
 }
 
-async function displayCandidates(candidates, renderID) {
+async function displayCandidates(candidates, renderID, forceRemoteRefresh = false) {
 	const listDiv = MA.byId('modList')
 	const candidateEntries = Object.entries(candidates).sort((a, b) => Intl.Collator().compare(a[0], b[0]))
 	let completeCount = 0
@@ -236,16 +246,10 @@ async function displayCandidates(candidates, renderID) {
 
 	MA.byIdHTML('updateStatus', `${I18N.defer('update_list_checking', false)} 0 / ${candidateEntries.length}`)
 
-	const checkPromises = candidateEntries.map(async ([, entry]) => {
+	const updateRows = (await mapWithConcurrency(candidateEntries, 6, async ([, entry]) => {
 		const result = entry.sourceType === 'github' ?
-			await withTimeout(window.update_IPC.getGitHub(entry.sourceURL)) :
-			{
-				hasDownload : false,
-				ok          : true,
-				source      : 'modhub',
-				url         : entry.sourceURL,
-				version     : entry.remoteVersion,
-			}
+			await withTimeout(window.update_IPC.getGitHub(entry.sourceURL, forceRemoteRefresh)) :
+			await withTimeout(window.update_IPC.getModHub(entry.modHubID, forceRemoteRefresh))
 		completeCount++
 		if ( renderID === activeRenderID ) {
 			MA.byIdHTML('updateStatus', `${I18N.defer('update_list_checking', false)} ${completeCount} / ${candidateEntries.length}`)
@@ -265,6 +269,7 @@ async function displayCandidates(candidates, renderID) {
 			collectionKey  : collectionKey,
 			collectionName : collectionName,
 			downloadURL    : result.downloadURL ?? null,
+			modHubID       : entry.modHubID,
 			modName        : entry.modName,
 			node           : DATA.templateEngine('update_line', {
 				collections   : collectionList.join(''),
@@ -277,27 +282,28 @@ async function displayCandidates(candidates, renderID) {
 				sourceName    : DATA.escapeSpecial(entry.sourceLabel),
 				statusText    : statusText(result),
 			}),
+			sourceType : entry.sourceType,
 			sourceURL : entry.sourceURL,
 			version   : result.version,
 		}
-	})
-
-	const updateRows = (await Promise.all(checkPromises)).filter((x) => x !== null)
+	})).filter((x) => x !== null)
 
 	if ( renderID !== activeRenderID ) { return }
 
-	for ( const { assetName, collectionKey, collectionName, downloadURL, modName, node, sourceURL, version } of updateRows ) {
+	for ( const { assetName, collectionKey, collectionName, downloadURL, modHubID, modName, node, sourceType, sourceURL, version } of updateRows ) {
 		node.firstElementChild.classList.add('bg-warning-subtle')
 		const selectCheckbox = node.querySelector('.update-select-checkbox')
 		if ( assetName !== null ) {
 			selectCheckbox.dataset.assetName = assetName
 			selectCheckbox.dataset.collectionName = collectionName
 			selectCheckbox.dataset.collectionKey = collectionKey
+			selectCheckbox.dataset.modHubId = modHubID ?? ''
 			selectCheckbox.dataset.modName = modName
 		}
 		if ( downloadURL !== null ) { selectCheckbox.dataset.downloadUrl = downloadURL }
 		selectCheckbox.dataset.remoteVersion = version
 		selectCheckbox.dataset.sourceUrl = sourceURL
+		selectCheckbox.dataset.sourceType = sourceType
 		selectCheckbox.addEventListener('change', updateSelectedCount)
 		const sourceButton = node.querySelector('.update-source-button')
 		sourceButton.dataset.sourceUrl = sourceURL
@@ -319,7 +325,7 @@ async function displayCandidates(candidates, renderID) {
 	)
 }
 
-async function startFromModList(modCollect) {
+async function startFromModList(modCollect, forceRemoteRefresh = false) {
 	const renderID = ++activeRenderID
 
 	if ( modCollect === null ) {
@@ -327,14 +333,181 @@ async function startFromModList(modCollect) {
 		return
 	}
 	try {
+		activeCollectionKey = modCollect.opts?.activeCollection ?? null
 		MA.byIdHTML('updateCollectionContext', collectionContextText(modCollect))
 		MA.byIdHTML('updateStatus', `${I18N.defer('update_list_checking', false)} ${I18N.defer('update_list_loading', false)}`)
 		MA.byIdHTML('modList', '')
 		MA.byId('selectionControls').classList.add('d-none')
 		updateSelectedCount()
-		await displayCandidates(makeCandidateMap(modCollect), renderID)
+		await displayCandidates(makeCandidateMap(modCollect), renderID, forceRemoteRefresh)
 	} catch (err) {
 		MA.byIdText('updateStatus', `Update list error: ${err.message}`)
+	}
+}
+
+async function refreshUpdateCandidates() {
+	const button = MA.byId('refreshUpdatesButton')
+	button.disabled = true
+	MA.byIdHTML('updateStatus', `${I18N.defer('update_list_checking', false)} ${I18N.defer('update_list_loading', false)}`)
+	try {
+		const modCollect = await window.update_IPC.get()
+		await startFromModList(modCollect, true)
+	} finally {
+		button.disabled = false
+	}
+}
+
+function manifestStateBadge(state) {
+	if ( state === 'downloadable' ) { return '<span class="badge text-bg-success">Latest ZIP available</span>' }
+	if ( state === 'manual' ) { return '<span class="badge text-bg-warning">Manual download</span>' }
+	return '<span class="badge text-bg-danger">Source missing</span>'
+}
+
+function manifestStateDetail(mod) {
+	if ( mod.state === 'downloadable' ) { return `${DATA.escapeSpecial(mod.sourceType === 'modhub' ? 'ModHub' : 'GitHub')} can supply this mod automatically.` }
+	if ( mod.state === 'manual' ) { return 'A source page is known, but no safe automatic ZIP download is available.' }
+	return 'No supported update source was included. Ask the collection author for this mod.'
+}
+
+function manifestSelectionChanged() {
+	const selected = [...document.querySelectorAll('.manifest-select:checked')].length
+	MA.byId('manifestInstall').disabled = selected === 0 || MA.byId('manifestCollection').value === ''
+}
+
+function setManifestSelections(checked) {
+	for ( const checkbox of document.querySelectorAll('.manifest-select:not(:disabled)') ) {
+		checkbox.checked = checked
+	}
+	manifestSelectionChanged()
+}
+
+function applyManifestViewFilter(filter) {
+	for ( const row of document.querySelectorAll('.manifest-row') ) {
+		row.classList.toggle('d-none', filter === 'attention' && row.dataset.state === 'downloadable')
+	}
+	const showAll = MA.byId('manifestShowAll')
+	const showAttention = MA.byId('manifestShowAttention')
+	showAll.classList.toggle('active', filter === 'all')
+	showAll.classList.toggle('btn-secondary', filter === 'all')
+	showAll.classList.toggle('btn-outline-secondary', filter !== 'all')
+	showAttention.classList.toggle('active', filter === 'attention')
+	showAttention.classList.toggle('btn-danger', filter === 'attention')
+	showAttention.classList.toggle('btn-outline-danger', filter !== 'attention')
+}
+
+function renderManifestPreview(result) {
+	manifestResolvedMods = result.mods
+	const list = MA.byId('manifestList')
+	list.innerHTML = ''
+	const counts = { downloadable : 0, manual : 0, missing : 0 }
+
+	for ( const [index, mod] of result.mods.entries() ) {
+		counts[mod.state]++
+		const localText = mod.localVersions.length === 0 ? 'not currently stored locally' : `local: ${mod.localVersions.join(', ')}`
+		const remoteText = mod.remoteVersion === null ? `shared version: ${mod.requestedVersion ?? 'unknown'}` : `latest: ${mod.remoteVersion}`
+		const node = DATA.templateEngine('manifest_line', {
+			detail     : manifestStateDetail(mod),
+			modName    : DATA.escapeSpecial(mod.modName),
+			stateBadge : manifestStateBadge(mod.state),
+			versions   : `${DATA.escapeSpecial(remoteText)}; ${DATA.escapeSpecial(localText)}`,
+		})
+		const row = node.firstElementChild
+		row.dataset.state = mod.state
+		if ( mod.state === 'missing' ) { row.classList.add('bg-danger-subtle', 'border-danger') }
+		if ( mod.state === 'manual' ) { row.classList.add('bg-warning-subtle', 'border-warning') }
+		const checkbox = node.querySelector('.manifest-select')
+		checkbox.dataset.index = index
+		checkbox.disabled = mod.state !== 'downloadable'
+		checkbox.addEventListener('change', manifestSelectionChanged)
+		const sourceButton = node.querySelector('.manifest-source-button')
+		if ( isWebURL(mod.sourceURL) ) {
+			sourceButton.classList.remove('d-none')
+			sourceButton.addEventListener('click', () => window.update_IPC.openURL(mod.sourceURL))
+		}
+		list.appendChild(node)
+	}
+
+	MA.byIdText('manifestTitle', `${result.manifest.collection.name} — ${result.mods.length} mods`)
+	MA.byIdText('manifestSummary', `${counts.downloadable} automatic, ${counts.manual} manual, ${counts.missing} missing.`)
+	MA.byId('manifestPreview').classList.remove('d-none')
+	applyManifestViewFilter('all')
+	setManifestSelections(false)
+}
+
+async function loadManifestCollections() {
+	const collections = await window.update_IPC.collectionManifestCollections()
+	const select = MA.byId('manifestCollection')
+	const previousValue = select.value
+	select.innerHTML = '<option value="">Choose a collection...</option>'
+	for ( const collection of collections ) {
+		const option = document.createElement('option')
+		option.value = collection.key
+		option.textContent = collection.name
+		select.appendChild(option)
+	}
+	if ( collections.some((collection) => collection.key === previousValue) ) {
+		select.value = previousValue
+	} else if ( collections.some((collection) => collection.key === activeCollectionKey) ) {
+		select.value = activeCollectionKey
+	}
+	manifestSelectionChanged()
+}
+
+async function toggleManifestPanel() {
+	const panel = MA.byId('manifestPanel')
+	panel.classList.toggle('d-none')
+	if ( !panel.classList.contains('d-none') ) { await loadManifestCollections() }
+}
+
+async function exportManifest(mode) {
+	const collectionKey = MA.byId('manifestCollection').value
+	if ( collectionKey === '' ) {
+		MA.byIdText('manifestStatus', 'Choose the collection you want to share first.')
+		return
+	}
+	MA.byIdText('manifestStatus', 'Preparing collection manifest...')
+	const result = await window.update_IPC.exportCollectionManifest({ collectionKey, mode })
+	if ( result.ok ) {
+		const detail = mode === 'clipboard' ? `Share link copied (${result.length.toLocaleString()} characters).` : `Manifest saved to ${result.filePath}`
+		MA.byIdText('manifestStatus', `${detail} ${result.count} mods included.`)
+	} else if ( !result.canceled ) {
+		MA.byIdText('manifestStatus', `Manifest export failed: ${result.error}`)
+	}
+}
+
+async function importManifest(mode) {
+	MA.byIdText('manifestStatus', 'Reading manifest and checking the latest supported sources...')
+	MA.byId('manifestPreview').classList.add('d-none')
+	const result = mode === 'clipboard' ?
+		await window.update_IPC.importCollectionManifestClipboard() :
+		await window.update_IPC.importCollectionManifestFile()
+	if ( result.ok ) {
+		renderManifestPreview(result)
+		MA.byIdText('manifestStatus', 'Manifest resolved. Review the results before installing anything.')
+	} else if ( !result.canceled ) {
+		MA.byIdText('manifestStatus', `Manifest import failed: ${result.error}`)
+	}
+}
+
+async function installManifestSelection() {
+	const collectionKey = MA.byId('manifestCollection').value
+	const downloads = [...document.querySelectorAll('.manifest-select:checked')]
+		.map((checkbox) => manifestResolvedMods[Number.parseInt(checkbox.dataset.index, 10)])
+	if ( collectionKey === '' || downloads.length === 0 ) { return }
+
+	MA.byId('manifestInstall').disabled = true
+	MA.byIdText('manifestStatus', `Installing ${downloads.length} selected mod(s)...`)
+	const result = await window.update_IPC.installCollectionManifest({ collectionKey, downloads })
+	if ( result.ok ) {
+		const failedNames = result.results.filter((entry) => entry.ok === false).map((entry) => entry.modName)
+		const failedText = result.failed === 0 ? '' : ` ${result.failed} failed: ${failedNames.join(', ')}.`
+		MA.byIdText('manifestStatus', `Collection import complete: ${result.installed} installed, ${result.skipped} already current.${failedText}`)
+		setManifestSelections(false)
+		const modCollect = await window.update_IPC.get()
+		await startFromModList(modCollect)
+	} else {
+		MA.byIdText('manifestStatus', `Collection import failed: ${result.error}`)
+		manifestSelectionChanged()
 	}
 }
 
@@ -345,15 +518,23 @@ window.addEventListener('DOMContentLoaded', () => {
 	MA.byIdEventIfExists('selectNoneButton', () => { setAllSelections(false) })
 	MA.byIdEventIfExists('openSelectedButton', openSelectedSources)
 	MA.byIdEventIfExists('downloadSelectedButton', downloadSelectedZIPs)
+	MA.byIdEventIfExists('refreshUpdatesButton', refreshUpdateCandidates)
 	MA.byIdEventIfExists('historyButton', () => window.update_IPC.dispatchHistory())
 	MA.byIdEventIfExists('vaultButton', () => window.update_IPC.dispatchVault())
+	MA.byIdEventIfExists('manifestToggleButton', toggleManifestPanel)
+	MA.byIdEventIfExists('manifestExportFile', () => exportManifest('file'))
+	MA.byIdEventIfExists('manifestCopyLink', () => exportManifest('clipboard'))
+	MA.byIdEventIfExists('manifestImportFile', () => importManifest('file'))
+	MA.byIdEventIfExists('manifestImportLink', () => importManifest('clipboard'))
+	MA.byIdEventIfExists('manifestSelectAll', () => setManifestSelections(true))
+	MA.byIdEventIfExists('manifestSelectNone', () => setManifestSelections(false))
+	MA.byIdEventIfExists('manifestShowAll', () => applyManifestViewFilter('all'))
+	MA.byIdEventIfExists('manifestShowAttention', () => applyManifestViewFilter('attention'))
+	MA.byIdEventIfExists('manifestInstall', installManifestSelection)
+	MA.byIdEventIfExists('manifestCollection', manifestSelectionChanged, 'change')
 
 	window.update_IPC.receive('mods:list', (modCollect) => {
 		startFromModList(modCollect)
 	})
 
-	Promise.race([window.update_IPC.get(), modListTimeout()]).then((modCollect) => {
-		if ( activeRenderID !== 0 ) { return }
-		startFromModList(modCollect)
-	})
 })

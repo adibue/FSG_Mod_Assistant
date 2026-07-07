@@ -429,6 +429,10 @@ class windowState {
 
 	#refreshGitHubVersion(sourceURL) {
 		if ( !this.#isGitHubURL(sourceURL) ) {
+			if ( this.mod.modHub.id !== null ) {
+				this.#refreshModHubVersion()
+				return
+			}
 			const updatePointer = this.#updatePointer(null, sourceURL)
 			MA.byIdHTML('github_version', `<em>${I18N.defer('update_source_not_configured', false )}</em>`)
 			MA.byIdHTML('update_status', `<em>${I18N.defer('update_source_not_configured', false )}</em>`)
@@ -472,11 +476,36 @@ class windowState {
 		})
 	}
 
-	#updatePointer(fileName = null, sourceURL = null) {
+	#refreshModHubVersion() {
+		MA.byIdText('update_status', I18N.defer('update_status_checking', false))
+		window.detail_IPC.getModHub(this.mod.modHub.id).then(async (result) => {
+			const updatePointer = this.#updatePointer(result.assetName ?? null, result.url ?? null, 'modhub', this.mod.modHub.id)
+			if ( !result.ok ) {
+				MA.byIdHTML('update_status', `<span class="text-warning">${I18N.defer('update_status_unknown', false)}</span>`)
+				MA.byId('download_latest_update')?.clsHide()
+				return
+			}
+
+			const hasRollbackBackup = await window.detail_IPC.hasRollbackBackup(updatePointer)
+			MA.byIdHTML('mh_version', `<a href="${DATA.escapeSpecial(result.url)}" target="_BLANK">${DATA.escapeSpecial(result.version)}</a>`)
+			MA.byIdHTML('modhub_status', this.#versionStatusHTML(this.mod.modDesc.version, result.version, hasRollbackBackup))
+			MA.byIdHTML('update_status', this.#versionStatusHTML(this.mod.modDesc.version, result.version, hasRollbackBackup))
+			this.#refreshDownloadButton(result, updatePointer)
+			this.#refreshRollbackButton(updatePointer, hasRollbackBackup)
+			this.#refreshRollbackVersions(updatePointer, hasRollbackBackup)
+		}).catch(() => {
+			MA.byIdHTML('update_status', `<span class="text-warning">${I18N.defer('update_status_unknown', false)}</span>`)
+			MA.byId('download_latest_update')?.clsHide()
+		})
+	}
+
+	#updatePointer(fileName = null, sourceURL = null, sourceType = 'github', modHubID = null) {
 		return {
 			collectionKey : this.mod.currentCollection,
 			fileName      : fileName,
+			modHubID      : modHubID,
 			modName       : this.mod.fileDetail.shortName,
+			sourceType    : sourceType,
 			sourceURL     : sourceURL,
 		}
 	}
@@ -501,24 +530,27 @@ class windowState {
 		downloadButton.onclick = async () => {
 			downloadButton.disabled = true
 			MA.byIdHTML('update_status', I18N.defer('update_list_updating', false))
-			const collectionName = await window.detail_IPC.collectName(updatePointer.collectionKey)
-			const resultDownload = await window.detail_IPC.downloadApplySelected([{
-				collectionKey  : updatePointer.collectionKey,
-				collectionName : collectionName,
-				fileName       : result.assetName,
-				modName         : updatePointer.modName,
-				sourceURL       : updatePointer.sourceURL,
-				url             : result.downloadURL,
-				version         : result.version,
-			}])
+			try {
+				const collectionName = await window.detail_IPC.collectName(updatePointer.collectionKey)
+				const resultDownload = await window.detail_IPC.downloadApplySelected([{
+					collectionKey  : updatePointer.collectionKey,
+					collectionName : collectionName,
+					fileName       : result.assetName,
+					modHubID       : updatePointer.modHubID,
+					modName         : updatePointer.modName,
+					sourceType      : updatePointer.sourceType,
+					sourceURL       : updatePointer.sourceURL,
+					url             : result.downloadURL,
+					version         : result.version,
+				}])
 
-			if ( resultDownload.ok ) {
+				if ( !resultDownload.ok ) { throw new Error(resultDownload.error ?? 'Unknown update error') }
 				downloadButton.clsHide()
 				MA.byIdHTML('update_status', `<span class="text-success">${I18N.defer('update_status_updated', false)}: ${DATA.escapeSpecial(result.version)}</span>`)
 				this.getMod()
-			} else {
+			} catch (err) {
 				downloadButton.disabled = false
-				MA.byIdHTML('update_status', `<span class="text-warning">${I18N.defer('update_list_update_failed', false)} ${DATA.escapeSpecial(resultDownload.error)}</span>`)
+				MA.byIdHTML('update_status', `<span class="text-danger">${I18N.defer('update_list_update_failed', false)} ${DATA.escapeSpecial(err.message)}</span>`)
 			}
 		}
 	}

@@ -7,6 +7,17 @@
 
 enhanceElement()
 
+let maLastEditableElement = null
+
+function maIsEditableElement(element) {
+	if ( element === null || typeof element === 'undefined' ) { return false }
+	return element.matches?.('input:not([type="hidden"]), textarea, select, [contenteditable="true"]') ?? false
+}
+
+function maActiveEditableElement() {
+	return maIsEditableElement(document.activeElement) ? document.activeElement : maLastEditableElement
+}
+
 // MARK: MA
 const MA = {
 	led        : {
@@ -126,7 +137,38 @@ const MA = {
 	fileOpCheckOp   : ( newChecked = true ) => {
 		for ( const element of MA.query('.fileOpCheck[type="checkbox"]') ) { element.checked = newChecked }
 	},
+
+	restoreInputFocus : (target = null) => {
+		const focusTarget = maIsEditableElement(target) ? target : maActiveEditableElement()
+		window.focus()
+		if ( focusTarget === null || !document.contains(focusTarget) || focusTarget.disabled ) { return }
+		requestAnimationFrame(() => {
+			window.focus()
+			focusTarget.focus({ preventScroll : true })
+			if ( typeof focusTarget.setSelectionRange === 'function' ) {
+				const endPos = focusTarget.value?.length ?? 0
+				focusTarget.setSelectionRange(endPos, endPos)
+			}
+		})
+	},
+
+	withRestoredInputFocus : (callback) => {
+		const focusTarget = maActiveEditableElement()
+		try {
+			return callback()
+		} finally {
+			setTimeout(() => { MA.restoreInputFocus(focusTarget) }, 0)
+			setTimeout(() => { MA.restoreInputFocus(focusTarget) }, 80)
+		}
+	},
+
+	alert   : (message) => MA.withRestoredInputFocus(() => alert(message)),
+	confirm : (message) => MA.withRestoredInputFocus(() => confirm(message)),
 }
+
+document.addEventListener('focusin', () => {
+	if ( maIsEditableElement(document.activeElement) ) { maLastEditableElement = document.activeElement }
+})
 // MARK: DATA
 const DATA = {
 	makeFolderIcon : (isOpen = false, isFav = false, isAct = false, isDrop = false, colorIndex = 0) => {
