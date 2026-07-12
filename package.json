@@ -1,6 +1,6 @@
 {
   "name": "fsg-mod-assistant",
-  "version": "5.1.5",
+  "version": "5.9.96",
   "description": "FSG Farm Sim Mod Assistant",
   "main": "modAssist_main.js",
   "homepage": "https://github.com/FSGModding/FSG_Mod_Assistant#readme",
@@ -16,28 +16,33 @@
   },
   "repository": "github:FSGModding/FSG_Mod_Assistant",
   "scripts": {
+    "start": "electron .",
+    "start:linux": "sh -c 'if command -v electron42 >/dev/null 2>&1; then electron42 . --ozone-platform=x11 --disable-gpu --disable-gpu-compositing --disable-gpu-sandbox --use-gl=swiftshader; elif command -v electron >/dev/null 2>&1; then electron . --ozone-platform=x11 --disable-gpu --disable-gpu-compositing --disable-gpu-sandbox --use-gl=swiftshader; else echo \"No system Electron found (expected electron42 or electron).\" >&2; exit 1; fi'",
     "lang": "node ./test/fix-locale-files.js",
     "pack": "electron-builder --dir",
+    "pack:linux": "electron-builder --dir --linux",
     "dist": "electron-builder",
+    "dist:linux": "electron-builder --linux AppImage",
     "test": "node ./test/test.js",
     "depends": "node ./test/outdated-deps.js",
     "generate-docs": "node_modules\\.bin\\jsdoc -c .jsdoc.json"
   },
   "devDependencies": {
-    "@babel/core": "^7.25.7",
-    "@babel/eslint-parser": "^7.25.7",
+    "@babel/core": "^7.26.0",
+    "@babel/eslint-parser": "^7.26.5",
+    "@neon-rs/cli": "^0.1.82",
     "ansi-colors": "^4.1.3",
     "clean-css": "^5.3.3",
-    "deepl-node": "^1.14.0",
+    "deepl-node": "^1.15.0",
     "deepmerge": "^4.3.1",
     "docolatte": "^4.5.1",
-    "electron": "^32.1.2",
+    "electron": "^33.3.1",
     "electron-builder": "~25.0.6",
-    "eslint": "^9.12.0",
-    "eslint-plugin-unicorn": "^56.0.0",
-    "globals": "^15.11.0",
-    "html-validate": "^8.24.1",
-    "jsdoc": "^4.0.3"
+    "eslint": "^9.18.0",
+    "eslint-plugin-unicorn": "^56.0.1",
+    "globals": "^15.14.0",
+    "html-validate": "^8.29.0",
+    "jsdoc": "^4.0.4"
   },
   "dependencies": {
     "ajv": "^8.17.1",
@@ -46,11 +51,11 @@
     "discord-rpc": "^4.0.1",
     "electron-store": "^8.2.0",
     "electron-updater": "^6.3.9",
-    "fast-xml-parser": "^4.5.0",
-    "glob": "^11.0.0",
+    "fast-xml-parser": "^4.5.1",
+    "fs_mod_parser_neon": "^0.1.5",
+    "glob": "^11.0.1",
     "node-stream-zip": "^1.15.0",
-    "unzip-stream": "^0.3.4",
-    "wasm-vips": "^0.0.10"
+    "unzip-stream": "^0.3.4"
   },
   "build": {
     "appId": "jtsage.fsmodassist",
@@ -67,10 +72,19 @@
       "!/renderer/inc/src/*"
     ],
     "extraFiles": [
-      "texconv.exe",
       "icon/*"
     ],
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Utility",
+      "icon": "build"
+    },
     "win": {
+      "extraFiles": [
+        "texconv.exe"
+      ],
       "target": [
         "nsis",
         "portable"
@@ -79,5 +93,9 @@
     "portable": {
       "artifactName": "${productName} Portable ${version}.exe"
     }
+  },
+  "allowScripts": {
+    "electron": true,
+    "fs_mod_parser_neon": true
   }
 }
