@@ -342,7 +342,7 @@ function buildCategoryItem({type = null, page = null, maxWidthCalc = null, image
 function buildItem(itemID, noBrand = false) {
 	const thisItem         = client_BGData.records[itemID]
 	const thisItemData     = ST.getInfo(thisItem)
-	let   dataItems        = null
+	let   dataItems
 	const attemptKey       = ST.getCleanParentID(thisItem.parentFile)
 
 	if ( attemptKey !== null ) {

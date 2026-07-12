@@ -62,8 +62,8 @@ const countTextFile = (fileList, isJS = false) => {
 
 const padData   = (data, pad = 0) => data === 0 ? ''.padStart(pad) : data.toString().padStart(pad)
 
-const toNum     = (num) => typeof num !== 'number' || num === 0 ? num : Intl.NumberFormat('en').format(num)
-const toMByte   = (num) => typeof num !== 'number' ? num : Intl.NumberFormat('en', {maximumFractionDigits : 2, minimumFractionDigits : 2}).format(num / 1024 / 1024)
+const toNum     = (num) => typeof num !== 'number' || num === 0 ? num : new Intl.NumberFormat('en').format(num)
+const toMByte   = (num) => typeof num !== 'number' ? num : new Intl.NumberFormat('en', {maximumFractionDigits : 2, minimumFractionDigits : 2}).format(num / 1024 / 1024)
 
 const makeLine  = (type, data) => {
 	return [

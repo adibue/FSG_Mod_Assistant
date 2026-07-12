@@ -1,0 +1,1 @@
+cmd_Release/obj.target/binding.node := g++ -o Release/obj.target/binding.node -shared -pthread -rdynamic -m64 -flto=4 -ffat-lto-objects -fprofile-use -fprofile-correction   -Wl,-soname=binding.node -Wl,--start-group Release/obj.target/binding/src/binding.o -Wl,--end-group 

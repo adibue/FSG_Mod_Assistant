@@ -241,15 +241,15 @@ class StateManager {
 	fixSorts() {
 		for ( const CKey of this.orderMap.keys ) {
 			const thisCol = this.collections[CKey]
-			thisCol.sorter       = thisCol.sorter.sort((a, b) => Intl.Collator().compare(a[1], b[1]))
+			thisCol.sorter       = thisCol.sorter.sort((a, b) => new Intl.Collator().compare(a[1], b[1]))
 			thisCol.sort_name    = thisCol.sorter.map((x) => x[0])
-			thisCol.sort_author  = thisCol.sorter.sort((a, b) => Intl.Collator().compare(a[2], b[2])).map((x) => x[0])
-			thisCol.sort_title   = thisCol.sorter.sort((a, b) => Intl.Collator().compare(a[3], b[3])).map((x) => x[0])
-			thisCol.sort_version = thisCol.sorter.sort((a, b) => Intl.Collator().compare(a[4], b[4])).map((x) => x[0])
-			thisCol.sort_date    = thisCol.sorter.sort((a, b) => Intl.Collator().compare(b[5], a[5])).map((x) => x[0])
+			thisCol.sort_author  = thisCol.sorter.sort((a, b) => new Intl.Collator().compare(a[2], b[2])).map((x) => x[0])
+			thisCol.sort_title   = thisCol.sorter.sort((a, b) => new Intl.Collator().compare(a[3], b[3])).map((x) => x[0])
+			thisCol.sort_version = thisCol.sorter.sort((a, b) => new Intl.Collator().compare(a[4], b[4])).map((x) => x[0])
+			thisCol.sort_date    = thisCol.sorter.sort((a, b) => new Intl.Collator().compare(b[5], a[5])).map((x) => x[0])
 			thisCol.sort_size    = thisCol.sorter.sort((a, b) => a[6] - b[6]).map((x) => x[0])
-			thisCol.sort_brand   = thisCol.sorter.sort((a, b) => Intl.Collator().compare(a[7], b[7])).map((x) => x[0])
-			thisCol.sort_cat     = thisCol.sorter.sort((a, b) => Intl.Collator().compare(a[8], b[8])).map((x) => x[0])
+			thisCol.sort_brand   = thisCol.sorter.sort((a, b) => new Intl.Collator().compare(a[7], b[7])).map((x) => x[0])
+			thisCol.sort_cat     = thisCol.sorter.sort((a, b) => new Intl.Collator().compare(a[8], b[8])).map((x) => x[0])
 		}
 	}
 
@@ -619,7 +619,7 @@ class StateManager {
 			node.addEventListener('click', () => { window.main_IPC.dispatchDetail(map.key) })
 			btnNode.appendChild(node)
 		} else if ( col.mapList.length > 1 ) {
-			const maps = col.mapList.sort((a, b) => Intl.Collator().compare(a.title, b.title))
+			const maps = col.mapList.sort((a, b) => new Intl.Collator().compare(a.title, b.title))
 			const node = document.createElement('div')
 			node.classList.add('dropdown', 'd-inline-block')
 			node.innerHTML = [
@@ -681,7 +681,7 @@ class StateManager {
 		return item.length !== 0 ? DATA.escapeSpecial(item.join(', ')) : null
 	}
 	#findExtraInfo(item) {
-		return item.map((x) => x.toLowerCase()).join(' ')
+		return item ? item.map((x) => x.toLowerCase()).join(' ') : ''
 	}
 	// MARK: addMod
 	/* eslint-disable-next-line complexity */

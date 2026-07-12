@@ -216,7 +216,7 @@ const doWork = () => {
 
 	Promise.allSettled(threadPromises).then(() => {
 		baseData.joints_list = [...baseData.joints_set]
-		baseData.brands.sort((a, b) => Intl.Collator().compare(a.title, b.title))
+		baseData.brands.sort((a, b) => new Intl.Collator().compare(a.title, b.title))
 		
 		fs.writeFileSync(
 			path.join(__dirname, 'baseGameData.js'),

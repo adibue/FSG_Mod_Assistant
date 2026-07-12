@@ -136,8 +136,8 @@ class stateManager {
 			returnHTML.push(`
 				<tr>
 					<td><span class="farm_${thisFarm.color.toString().padStart(2, '0')}">${thisFarm.name}</span></td>
-					<td class="text-end">${Intl.NumberFormat(this.langCode, {maximumFractionDigits : 0}).format(thisFarm.money)}</td>
-					<td class="text-end">${Intl.NumberFormat(this.langCode, {maximumFractionDigits : 0}).format(thisFarm.loan)}</td>
+					<td class="text-end">${new Intl.NumberFormat(this.langCode, {maximumFractionDigits : 0}).format(thisFarm.money)}</td>
+					<td class="text-end">${new Intl.NumberFormat(this.langCode, {maximumFractionDigits : 0}).format(thisFarm.loan)}</td>
 				</tr>`
 			)
 		}

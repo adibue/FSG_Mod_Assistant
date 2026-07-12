@@ -246,7 +246,7 @@ class WindowState {
 		})
 
 		const badgeDiv = node.querySelector('.badgeDiv')
-		for ( const part of displayBadge.sort((a, b) => Intl.Collator().compare(a[0], b[0])) ) {
+		for ( const part of displayBadge.sort((a, b) => new Intl.Collator().compare(a[0], b[0])) ) {
 			const element = I18N.buildBadge({name : part[0], class : ['bg-gradient', 'rounded-1', 'ms-1'] }, { i18nPrefix : 'savegame_', classPrefix : 'badge-savegame' })
 			badgeDiv.appendChild(element)
 		}
@@ -402,7 +402,7 @@ class WindowState {
 		
 		return {
 			haveModSet : haveModSet,
-			fullModSet : new Set([...fullModArr, ...save_mods].sort(Intl.Collator().compare)),
+			fullModSet : new Set([...fullModArr, ...save_mods].sort(new Intl.Collator().compare)),
 		}
 	}
 

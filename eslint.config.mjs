@@ -4,6 +4,9 @@ import eslintPluginUnicorn from 'eslint-plugin-unicorn'
 import globals from 'globals'
 
 export default [
+	{
+		ignores : ['**/*.min.js', 'node_modules/', '.yarn/', '.git/'],
+	},
 	js.configs.recommended,
 	{
 		files : ['**/*.js'],
@@ -118,7 +121,6 @@ export default [
 			'unicorn/new-for-builtins'                 : 'error',
 			'unicorn/no-abusive-eslint-disable'        : 'error',
 			'unicorn/no-array-callback-reference'      : 'error',
-			'unicorn/no-array-for-each'                : 'error',
 			'unicorn/no-array-method-this-argument'    : 'error',
 			'unicorn/no-array-push-push'               : 'error',
 			'unicorn/no-for-loop'                      : 'error',

@@ -17,7 +17,7 @@ const filePaths = [
 ]
 
 const baseLocaleData = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'translations', 'en.json')))
-const baseLocaleKeys = new Set(Object.keys(baseLocaleData).sort(Intl.Collator().compare))
+const baseLocaleKeys = new Set(Object.keys(baseLocaleData).sort(new Intl.Collator().compare))
 
 for ( const key of baseLocaleKeys ) {
 	// remove titles

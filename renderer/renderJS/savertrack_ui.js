@@ -20,7 +20,7 @@ window.savetrack_IPC.receive('savetrack:results', (modCollect) => {
 
 	MA.byId('no_list_yet').clsHide()
 
-	saveInfo.current.sort(Intl.Collator().compare)
+	saveInfo.current.sort(new Intl.Collator().compare)
 	
 	newHTML.push(DATA.templateEngine('savetrack_current', {
 		savegameID : saveInfo.saveID,
@@ -28,8 +28,8 @@ window.savetrack_IPC.receive('savetrack:results', (modCollect) => {
 	}))
 
 	for ( const thisBack of saveInfo.byDate ) {
-		thisBack.onlyBackup.sort(Intl.Collator().compare)
-		thisBack.onlyOriginal.sort(Intl.Collator().compare)
+		thisBack.onlyBackup.sort(new Intl.Collator().compare)
+		thisBack.onlyOriginal.sort(new Intl.Collator().compare)
 
 		const dateParts = thisBack.date.split('_')
 

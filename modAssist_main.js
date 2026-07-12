@@ -19,7 +19,7 @@ const { funcLib }      = require('./lib/modAssist_func_lib.js')
 const { EventEmitter } = require('node:events')
 const path             = require('node:path')
 const fs               = require('node:fs')
-const Store            = require('electron-store')
+const Store            = require('electron-store').default
 
 serveIPC.log = new (require('./lib/modUtilLib')).ma_logger('modAssist', app, 'assist.log', gotTheLock)
 funcLib.general.doBootLog()
@@ -28,7 +28,7 @@ serveIPC.l10n           = new (require('./lib/modUtilLib')).translator(null, !ap
 serveIPC.l10n.mcVersion = app.getVersion()
 serveIPC.icon.tray      =
 	funcLib.general.getPackPathRoot('build', process.platform === 'win32' ? 'icon.ico' : process.platform === 'darwin' ? 'icon.icns' : 'icon.png') ??
-	funcLib.general.getPackPathRender('img', process.platform === 'win32' ? 'icon.ico' : 'icon.png') ??
+	funcLib.general.getPackPathRender('img', process.platform === 'win32' ? 'icon.ico' : process.platform === 'darwin' ? 'icon.icns' : 'icon.png') ??
 	process.execPath
 
 const __ = (x) => serveIPC.l10n.syncStringLookup(x)
@@ -1039,10 +1039,12 @@ app.whenReady().then(() => {
 			app.setAppUserModelId('jtsage.fsmodassist')
 		}
 		
-		serveIPC.windowLib.tray = new Tray(serveIPC.icon.tray)
-		serveIPC.windowLib.tray.setToolTip('FSG Mod Assist')
-		serveIPC.windowLib.tray.on('click', () => { serveIPC.windowLib.win.main.show() })
-		serveIPC.windowLib.trayContextMenu()
+		if (serveIPC.icon.tray) {
+			serveIPC.windowLib.tray = new Tray(serveIPC.icon.tray)
+			serveIPC.windowLib.tray.setToolTip('FSG Mod Assist')
+			serveIPC.windowLib.tray.on('click', () => { serveIPC.windowLib.win.main.show() })
+			serveIPC.windowLib.trayContextMenu()
+		}
 
 		funcLib.modHub.refresh()
 

@@ -14,7 +14,7 @@ const { testLib } = require('./test.js')
 
 const testPath       = path.join(__dirname, '../translations')
 const baseLocaleData = JSON.parse(fs.readFileSync(path.join(testPath, 'en.json')))
-const baseLocaleKeys = new Set(Object.keys(baseLocaleData).sort(Intl.Collator().compare))
+const baseLocaleKeys = new Set(Object.keys(baseLocaleData).sort(new Intl.Collator().compare))
 const test           = new testLib('Local File Fixer')
 
 const deepl          = require('deepl-node')
@@ -100,7 +100,7 @@ async function testFile(file) {
 
 function fileWriter(data, file) {
 	test.step(`${file} :: Writing Clean File`)
-	const keysToWrite = Object.keys(data).sort(Intl.Collator().compare)
+	const keysToWrite = Object.keys(data).sort(new Intl.Collator().compare)
 	const longestKey  = keysToWrite.reduce((a, b) => a.length <= b.length ? b : a).length
 	const fileLines   = []
 

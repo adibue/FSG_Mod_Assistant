@@ -50,7 +50,7 @@ const NUM = {
 	},
 
 	fmtMulti  : (amount, multi) => `<span class="me-1">${NUM.fmtNoFrac(amount * multi)}</span>`,
-	fmtNoFrac : (amount) => Intl.NumberFormat(locale, { maximumFractionDigits : 0 }).format(amount),
+	fmtNoFrac : (amount) => new Intl.NumberFormat(locale, { maximumFractionDigits : 0 }).format(amount),
 	fmtType   : ( type, value ) => {
 		if ( typeof value === 'number' && value === 0 ) { return '' }
 		
@@ -77,7 +77,7 @@ const NUM = {
 
 			for ( const thisTrans of transArray ) {
 				const thisNumber = thisValue * thisTrans.factor
-				thisText.push(`${Intl.NumberFormat(locale, { maximumFractionDigits : thisTrans.precision }).format(thisNumber)} ${I18N.defer(thisTrans.unit, false)}`)
+				thisText.push(`${new Intl.NumberFormat(locale, { maximumFractionDigits : thisTrans.precision }).format(thisNumber)} ${I18N.defer(thisTrans.unit, false)}`)
 			}
 			returnText.push(thisText.join(' / '))
 		}

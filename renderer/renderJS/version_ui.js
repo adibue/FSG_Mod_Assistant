@@ -53,7 +53,7 @@ function processVersions(modCollect) {
 		}
 		entry.verList = entry.verList
 			.map((x) => ({ name : collectKeyName[x[0]], version : x[1]}))
-			.sort((a, b) => Intl.Collator().compare(a.name, b.name))
+			.sort((a, b) => new Intl.Collator().compare(a.name, b.name))
 
 		const firstFoundVersion = entry.verList[0].version
 		entry.match = entry.verList.every((x) => x.version === firstFoundVersion )
