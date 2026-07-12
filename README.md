@@ -49,6 +49,13 @@ Builds are available for the following:
 
 - __win x64 Installer__ : with auto updating
 - __win x64 Portable__ : no need to install, but no auto updating
+- __linux x64 AppImage__ : requires `libfuse.so.2` (`fuse2` package on many distros)
+
+### Linux AppImage Notes
+
+- If your system does not provide `libfuse.so.2`, install the `fuse2` compatibility package.
+- As a fallback, AppImages can be started without FUSE using:
+  - `APPIMAGE_EXTRACT_AND_RUN=1 ./FSModAssistant-<version>.AppImage`
 
 ### Install Video
 

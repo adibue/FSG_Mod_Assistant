@@ -26,8 +26,10 @@ funcLib.general.doBootLog()
 
 serveIPC.l10n           = new (require('./lib/modUtilLib')).translator(null, !app.isPackaged)
 serveIPC.l10n.mcVersion = app.getVersion()
-serveIPC.icon.tray      = funcLib.general.getPackPathRender('img', 'icon.ico')
-serveIPC.decodePath     = funcLib.general.getPackPathRoot('texconv.exe')
+serveIPC.icon.tray      =
+	funcLib.general.getPackPathRoot('build', process.platform === 'win32' ? 'icon.ico' : process.platform === 'darwin' ? 'icon.icns' : 'icon.png') ??
+	funcLib.general.getPackPathRender('img', process.platform === 'win32' ? 'icon.ico' : 'icon.png') ??
+	process.execPath
 
 const __ = (x) => serveIPC.l10n.syncStringLookup(x)
 
@@ -64,7 +66,9 @@ if ( process.platform === 'win32' && app.isPackaged && gotTheLock && !isPortable
 
 funcLib.wizard.initMain()
 
-const { modFileCollection, modPackChecker, saveFileChecker, savegameTrack, csvFileChecker } = require('./lib/modCheckLib.js')
+// const { modFileCollection, modPackChecker, saveFileChecker, savegameTrack, csvFileChecker } = require('./lib/modCheckLib.js')
+const { modFileCollection, csvFileChecker, savegameTrack } = require('./lib/modCheckLib.js')
+const { parseModFirstPass, parseSaveGame } = require('fs_mod_parser_neon')
 
 const settingDefault = new (require('./lib/modAssist_window_lib.js')).defaultSettings()
 
@@ -74,7 +78,6 @@ serveIPC.storeSet         = new Store({schema : settingDefault.defaults, migrati
 serveIPC.storeCache       = new (require('./lib/modUtilLib.js')).modCacheManager(app.getPath('userData'))
 serveIPC.storeSites       = new Store({name : 'mod_source_site', migrations : settingDefault.migrateSite, clearInvalidConfig : true})
 serveIPC.storeNote        = new Store({name : 'col_notes', clearInvalidConfig : true})
-serveIPC.storeCacheDetail = new Store({name : 'mod_detail_cache', clearInvalidConfig : true})
 
 serveIPC.windowLib.loadSettings()
 
@@ -124,7 +127,7 @@ ipcMain.handle('files:drop', async (_, files) => {
 		return
 	} else if ( files.length === 1 && files[0].endsWith('.zip') ) {
 		// Handles ZIP packs, ZIP save game, and finally single ZIP add
-		const saveResult = await new saveFileChecker(files[0], false, true).getInfo()
+		const saveResult = JSON.parse(parseSaveGame(files[0]))
 		
 		if ( saveResult.isValid ) {
 			serveIPC.windowLib.createNamedWindow('save', {
@@ -133,7 +136,9 @@ ipcMain.handle('files:drop', async (_, files) => {
 			})
 			return
 		}
-		return getCopyMoveDelete('import', null, null, files, await new modPackChecker(files[0]).getInfo())
+		// expect [t/f, file list array]
+		const quickParseMod = JSON.parse(parseModFirstPass(files[0]))
+		return getCopyMoveDelete('import', null, null, files, [quickParseMod.fileDetail.isModPack, quickParseMod.fileDetail.zipFiles])
 	}
 	return getCopyMoveDelete('import', null, null, files, false)
 })
@@ -295,37 +300,30 @@ ipcMain.handle('i18n:lang', (_e, newValue = null) => {
 	}
 	return serveIPC.l10n.currentLocale
 })
-ipcMain.handle('i18n:get', async (_, key) => {
+ipcMain.handle('i18n:get', async (_, key, version = 25) => {
 	switch (key) {
 		case 'app_name':
-			return serveIPC.l10n.getTextOverride(key, { prefix : '<i class="fsico-ma-large"></i>' })
+			return serveIPC.l10n.getTextOverride(key, version, { prefix : '<i class="fsico-ma-large"></i>' })
 		case 'app_version' :
-			return serveIPC.l10n.getTextOverride(key, { newText : !app.isPackaged ? app.getVersion().toString() : '' })
+			return serveIPC.l10n.getTextOverride(key, version, { newText : !app.isPackaged ? app.getVersion().toString() : '' })
 		case 'game_icon' :
-			return serveIPC.l10n.getTextOverride(key, { newText : `<i class="fsico-ver-${funcLib.prefs.ver()}"></i>` })
+			return serveIPC.l10n.getTextOverride(key, version, { newText : `<i class="fsico-ver-${funcLib.prefs.ver()}"></i>` })
 		case 'game_icon_lg' :
-			return serveIPC.l10n.getTextOverride(key, { newText : `<i class="fsico-ver-${funcLib.prefs.ver()}"></i>` })
+			return serveIPC.l10n.getTextOverride(key, version, { newText : `<i class="fsico-ver-${funcLib.prefs.ver()}"></i>` })
 		case 'clean_cache_size' : {
 			try {
 				const cacheSize = fs.statSync(path.join(app.getPath('userData'), 'mod_cache.json')).size/(1024*1024)
 				const iconSize  = fs.statSync(path.join(app.getPath('userData'), 'mod_icons.json')).size/(1024*1024)
-				return serveIPC.l10n.getTextOverride(key, { suffix : ` ${cacheSize.toFixed(2)}MB / ${iconSize.toFixed(2)}MB` })
+				const itemSize  = fs.statSync(path.join(app.getPath('userData'), 'mod_items.json')).size/(1024*1024)
+				return serveIPC.l10n.getTextOverride(key, version, { suffix : ` ${cacheSize.toFixed(2)}MB / ${iconSize.toFixed(2)}MB / ${itemSize.toFixed(2)}MB` })
 			} catch {
-				return serveIPC.l10n.getTextOverride(key, { suffix : ' 0.00MB' })
-			}
-		}
-		case 'clean_detail_cache_size' : {
-			try {
-				const cacheSize = fs.statSync(path.join(app.getPath('userData'), 'mod_detail_cache.json')).size/(1024*1024)
-				return serveIPC.l10n.getTextOverride(key, { suffix : ` ${cacheSize.toFixed(2)}MB` })
-			} catch {
-				return serveIPC.l10n.getTextOverride(key, { suffix : ' 0.00MB' })
+				return serveIPC.l10n.getTextOverride(key, version, { suffix : ' 0.00MB' })
 			}
 		}
 		case 'clear_malware_size' :
-			return serveIPC.l10n.getTextOverride(key, { newText : `[ ${serveIPC.storeSet.get('suppress_malware', []).join(', ')} ]` })
+			return serveIPC.l10n.getTextOverride(key, version, { newText : `[ ${serveIPC.storeSet.get('suppress_malware', []).join(', ')} ]` })
 		default :
-			return serveIPC.l10n.getText(key)
+			return serveIPC.l10n.getText(key, version)
 	}
 })
 
@@ -337,10 +335,17 @@ ipcMain.handle('collect:all',          () => serveIPC.modCollect.toRenderer())
 ipcMain.handle('collect:resolveList',  (_, shortName) => serveIPC.modCollect.modVerListFiltered(shortName))
 ipcMain.handle('collect:name',         (_, key) => serveIPC.modCollect.mapCollectionToName(key))
 ipcMain.handle('mod:modColUUID', (_, fullUUID) => serveIPC.modCollect.renderMod(fullUUID))
-ipcMain.handle('store:modColUUID', (_, fullUUID) => getStoreItems(fullUUID))
 
 
 // MARK: detail
+ipcMain.handle('detail:getMod', async (_, fullUUID) => {
+	const thisMod = await serveIPC.modCollect.detailMod(fullUUID)
+	if ( thisMod[0] === null ) { return null }
+	if ( thisMod[0].includeDetail === 2 ) {
+		return thisMod
+	}
+	return serveIPC.modCollect.getAndUpdateDetail(fullUUID)
+})
 ipcMain.on('dispatch:detail', (_, thisMod) => { openDetailWindow(thisMod) })
 
 function openDetailWindow(thisMod) {
@@ -348,33 +353,12 @@ function openDetailWindow(thisMod) {
 	return serveIPC.windowLib.createNamedMulti(`detail${ver}`, { queryString : `mod=${thisMod}` })
 }
 
-async function getStoreItems(fullUUID) {
-	const thisPromise   = Promise.withResolvers()
-	const thisMod       = serveIPC.modCollect.modColUUIDToRecord(fullUUID)
-	const thisCacheUUID = thisMod.uuid
-
-	if ( !thisMod.fileDetail.isFolder && serveIPC.storeCacheDetail.has(thisCacheUUID) ) {
-		const thisCache = serveIPC.storeCacheDetail.get(thisCacheUUID)
-		serveIPC.storeCacheDetail.set(thisCacheUUID, { // refresh date
-			date    : new Date(),
-			results : thisCache.results,
-		})
-		thisPromise.resolve(thisCache.results)
-		serveIPC.log.info('mod-look', 'Loaded details from cache', thisCacheUUID)
-	} else {
-		modStoreItems({
-			thisMod : thisMod,
-			cacheUUID : thisCacheUUID,
-			thisPromise : thisPromise,
-		})
-	}
-
-	return thisPromise.promise
-}
-
 
 // MARK: compare
-ipcMain.on('dispatch:compare', (_, compareArray) => openCompareWindow(compareArray))
+ipcMain.on('dispatch:compare', (_, compareArray) => {
+	const compareSet = new Set(compareArray)
+	openCompareWindow([...compareSet])
+})
 ipcMain.handle('compare:get', () => Object.fromEntries(serveIPC.compareMap))
 ipcMain.handle('compare:clear', () => {
 	serveIPC.compareMap.clear()
@@ -446,7 +430,7 @@ ipcMain.on('main:dragOut', (event, modID) => {
 
 	event.sender.startDrag({
 		file : path.join(thisFolder, path.basename(thisMod.fileDetail.fullPath)),
-		icon : serveIPC.windowLib.contextIcons.fileCopy,
+		icon : serveIPC.windowLib.contextIcons.dragDrop,
 	})
 })
 ipcMain.on('context:mod', async (event, modID, modIDs) => {
@@ -479,13 +463,14 @@ ipcMain.on('context:mod', async (event, modID, modIDs) => {
 			'log'
 		))
 	} else if ( isSave ) {
+		const currentGameVersion = funcLib.prefs.ver()
 		const subMenu = [...serveIPC.modCollect.collections]
-			.filter((x) => serveIPC.modCollect.versionSame(x, 22))
+			.filter((x) => serveIPC.modCollect.versionSame(x, currentGameVersion))
 			.map(   (collectKey) => ({
 				label : serveIPC.modCollect.mapCollectionToName(collectKey),
 				click : () => {
 					serveIPC.windowLib.createNamedWindow('save', { collectKey : collectKey })
-					setTimeout(() => { saveCompare_read(thisPath, thisMod.fileDetail.isFolder) }, 250)
+					setTimeout(() => { saveCompare_read(thisPath, thisMod.fileDetail.isFolder) }, 500)
 				},
 				icon  : serveIPC.windowLib.contextIcons.collection,
 			}))
@@ -682,10 +667,6 @@ ipcMain.on('settings:clearMalware', () => {
 	serveIPC.storeSet.set('suppress_malware', [])
 	processModFolders(true)
 })
-ipcMain.on('settings:clearDetail', () => {
-	serveIPC.storeCacheDetail.clear()
-	return true
-})
 ipcMain.on('cache:clear', () => {
 	serveIPC.storeCache.clearAll()
 	serveIPC.windowLib.forceFocus('main')
@@ -694,10 +675,6 @@ ipcMain.on('cache:clear', () => {
 ipcMain.on('cache:malware', () => {
 	serveIPC.storeSet.set('suppress_malware', [])
 	processModFolders(true)
-})
-ipcMain.on('cache:detail', () => {
-	serveIPC.storeCacheDetail.clear()
-	serveIPC.windowLib.sendToValidWindow('main', 'settings:invalidate')
 })
 ipcMain.on('cache:clean', () => {
 	const md5Set     = new Set(serveIPC.storeCache.keys)
@@ -720,7 +697,7 @@ ipcMain.on('cache:clean', () => {
 })
 ipcMain.on('settings:prefFile',    (_, version) => { funcLib.prefs.changeFilePath(version, false) })
 ipcMain.on('settings:gamePath',    (_, version) => { funcLib.prefs.changeFilePath(version, true) })
-
+ipcMain.handle('settings:clear',   (_, version) => funcLib.prefs.clearVersion(version))
 
 // MARK: setup wizard
 ipcMain.handle('wizard:update', () => ({
@@ -769,7 +746,7 @@ ipcMain.on('file:exportZIP', (_, mods) => { funcLib.general.exportZIP(mods) })
 ipcMain.on('dispatch:savemanage', () => { funcLib.saveManage.refresh() })
 ipcMain.on('savemanage:compare', (_, fullPath, collectKey) => {
 	serveIPC.windowLib.createNamedWindow('save', { collectKey : collectKey })
-	setTimeout(() => { saveCompare_read(fullPath, true) }, 250)
+	setTimeout(() => { saveCompare_read(fullPath, true) }, 500)
 })
 ipcMain.on('savemanage:delete',  (_, fullPath) => { funcLib.saveManage.delete(fullPath) })
 ipcMain.on('savemanage:export',  (_, fullPath) => { funcLib.saveManage.export(fullPath) })
@@ -820,13 +797,12 @@ ipcMain.on('save:cacheGameSave', (_, payload) => {
 	refreshClientModList()
 })
 
-function saveCompare_read(thisPath, isFolder) {
+function saveCompare_read(thisPath) {
 	try {
-		new saveFileChecker(thisPath, isFolder).getInfo().then((results) => {
-			serveIPC.windowLib.sendModList({ thisSaveGame : results }, 'save:saveInfo', 'save', false )
-		})
+		const saveResult = JSON.parse(parseSaveGame(thisPath))
+		serveIPC.windowLib.sendModList({ thisSaveGame : saveResult }, 'save:saveInfo', 'save', false )
 	} catch (err) {
-		serveIPC.log.danger('save-check', 'Load failed', err)
+		serveIPC.log.danger('save-check', 'Load failed', thisPath, err.message)
 	}
 }
 function saveCompare_open(zipMode = false) {
@@ -894,7 +870,7 @@ ipcMain.handle('state:all', () => { return {
 	foldersDirty       : serveIPC.isFoldersDirty,
 	gameRunning        : serveIPC.isGameRunning,
 	gameRunningEnabled : serveIPC.isGamePolling,
-	keepLoaderModal    : serveIPC.isProcessing || serveIPC.isDownloading,
+	keepLoaderModal    : serveIPC.isProcessing || serveIPC.isDownloading || serveIPC.isZipExporting,
 	pinMini            : serveIPC.windowLib.isAlwaysOnTop('mini'),
 	prefDanger         : serveIPC.isPrefWrong,
 	updateReady        : serveIPC.modCollect.updateIsReady,
@@ -911,7 +887,7 @@ function refreshClientModList(closeLoader = true) {
 	// DATA STRUCT - send mod list
 	const currentVersion = funcLib.prefs.ver()
 	const pollGame       = serveIPC.storeSet.get('poll_game', true)
-	serveIPC.isGamePolling = currentVersion > 17 && pollGame
+	serveIPC.isGamePolling = process.platform === 'win32' && currentVersion > 17 && pollGame
 	
 	// updateGameRunning()
 	serveIPC.windowLib.sendModList(
@@ -983,10 +959,13 @@ modQueueRunner.on('process-mods-done', () => {
 
 			const thisMod = serveIPC.modCollect.modColUUIDToRecord(thisBadMod)
 
+			// not sure why, but sometimes this data is stale.
+			if ( thisMod === null ) { continue }
+
 			// Always ignore, user has whitelisted file
 			if ( currentSavedIgnoreList.has(thisMod.fileDetail.shortName) ) { continue }
 			// Always ignore, file added to master whitelist
-			if ( serveIPC.whiteMalwareList.has(thisMod.fileDetail.shortName) ) { continue }
+			if ( serveIPC.whiteMalwareList.includes(thisMod.fileDetail.shortName) ) { continue }
 
 			const thisMessage = [
 				__('malware_dialog_intro'),
@@ -1039,7 +1018,10 @@ modQueueRunner.on('process-mods-done', () => {
 					break
 			}
 		}
-		Promise.allSettled(trashPromises).then(() => { funcLib.general.doChangelog(); processModFolders() })
+		Promise.allSettled(trashPromises).then(() => {
+			funcLib.general.doChangelog()
+			if ( trashPromises.length !== 0 ) { processModFolders() }
+		})
 	} else {
 		funcLib.general.doChangelog()
 	}
@@ -1083,16 +1065,6 @@ app.whenReady().then(() => {
 			}
 		})
 
-		// app.setUserTasks([
-		// 	{
-		// 		arguments : '--start-game',
-		// 		description : '',
-		// 		iconIndex : 0,
-		// 		iconPath  : serveIPC.icon.tray,
-		// 		program   : process.execPath,
-		// 		title     : __('launch_game'),
-		// 	}
-		// ])
 
 		serveIPC.windowLib.createMainWindow(() => {
 			if ( serveIPC.storeSet.has('modFolders') ) {
@@ -1120,59 +1092,3 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {	if (process.platform !== 'darwin') { app.quit() } })
 
-
-// #region ModLook
-function modStoreItems({ thisMod = null, cacheUUID = null, thisPromise = null} = {}) {
-	const lookThread = require('node:child_process').fork(path.join(__dirname, 'lib', 'queueRunner.js'), [
-		23,
-		serveIPC.decodePath,
-		serveIPC.l10n.deferCurrentLocale(),
-		serveIPC.__('unit_hp')
-	])
-	lookThread.on('message', (m) => {
-		if ( Object.hasOwn(m, 'type') ) {
-			switch (m.type) {
-				case 'log' :
-					serveIPC.log[m.level](`worker-thread-${m.pid}`, m.data.join(' '))
-					break
-				case 'modLook' : {
-					for ( const logLine of m.logLines.items ) {
-						serveIPC.log[logLine[0]](m.logLines.group, logLine[1])
-					}
-	
-					if ( typeof m.modLook === 'undefined' ) {
-						serveIPC.log.danger(`worker-thread-${m.pid}`, 'Unable to read mod file/folder!')
-						break
-					}
-	
-					if ( ! thisMod.isFolder ) {
-						serveIPC.storeCacheDetail.set(cacheUUID, {
-							date    : new Date(),
-							results : m.modLook,
-						})
-					}
-					
-					thisPromise.resolve(m.modLook)
-					serveIPC.log.debug(`worker-thread-${m.pid}`, `To main - modLook :: ${Object.keys(m.modLook.items).length} items`)
-					break
-				}
-				case 'modLookFail' :
-					thisPromise.reject(m.error)
-					break
-				default :
-					break
-			}
-		}
-		// doModLook_response(m, thisMod, thisUUID) })
-	})
-
-	lookThread.send({
-		type : 'look',
-		data : {
-			modRecord  : thisMod,
-			searchPath : serveIPC.modCollect.modColUUIDToFolder(thisMod.colUUID),
-		},
-	})
-	lookThread.send({ type : 'exit' })
-}
-// #endregion ModLook Thread
