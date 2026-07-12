@@ -28,34 +28,35 @@
     "generate-docs": "node_modules\\.bin\\jsdoc -c .jsdoc.json"
   },
   "devDependencies": {
-    "@babel/core": "^7.26.0",
-    "@babel/eslint-parser": "^7.26.5",
-    "@neon-rs/cli": "^0.1.82",
+    "@babel/core": "^7.29.7",
+    "@babel/eslint-parser": "^7.29.7",
+    "@neon-rs/cli": "^0.2.6",
     "ansi-colors": "^4.1.3",
     "clean-css": "^5.3.3",
-    "deepl-node": "^1.15.0",
+    "deepl-node": "^1.27.0",
     "deepmerge": "^4.3.1",
     "docolatte": "^4.5.1",
-    "electron": "^33.3.1",
+    "electron": "^33.4.11",
     "electron-builder": "~25.0.6",
-    "eslint": "^9.18.0",
+    "eslint": "^9.39.5",
     "eslint-plugin-unicorn": "^56.0.1",
-    "globals": "^15.14.0",
+    "globals": "^15.15.0",
     "html-validate": "^8.29.0",
-    "jsdoc": "^4.0.4"
+    "jsdoc": "^4.0.5"
   },
   "dependencies": {
-    "ajv": "^8.17.1",
+    "ajv": "^8.20.0",
     "ajv-formats": "^2.1.1",
     "archiver": "^7.0.1",
     "discord-rpc": "^4.0.1",
     "electron-store": "^8.2.0",
-    "electron-updater": "^6.3.9",
-    "fast-xml-parser": "^4.5.1",
+    "electron-updater": "^6.8.9",
+    "fast-xml-parser": "^4.5.7",
     "fs_mod_parser_neon": "^0.1.5",
-    "glob": "^11.0.1",
+    "glob": "^13.0.6",
     "node-stream-zip": "^1.15.0",
-    "unzip-stream": "^0.3.4"
+    "unzip-stream": "^0.3.4",
+    "wasm-vips": "^0.0.18"
   },
   "build": {
     "appId": "jtsage.fsmodassist",
@@ -96,6 +97,7 @@
   },
   "allowScripts": {
     "electron": true,
-    "fs_mod_parser_neon": true
+    "fs_mod_parser_neon": true,
+    "core-js": true
   }
 }
