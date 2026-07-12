@@ -55,7 +55,8 @@
     "fs_mod_parser_neon": "^0.1.5",
     "glob": "^11.0.1",
     "node-stream-zip": "^1.15.0",
-    "unzip-stream": "^0.3.4"
+    "unzip-stream": "^0.3.4",
+    "wasm-vips": "^0.0.18"
   },
   "build": {
     "appId": "jtsage.fsmodassist",
@@ -96,6 +97,7 @@
   },
   "allowScripts": {
     "electron": true,
-    "fs_mod_parser_neon": true
+    "fs_mod_parser_neon": true,
+    "core-js": true
   }
 }
